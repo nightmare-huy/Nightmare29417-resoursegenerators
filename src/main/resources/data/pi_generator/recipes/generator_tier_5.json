@@ -1,0 +1,30 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "G": {
+      "item": "pi_generator:generator_tier_4"
+    },
+    "C": {
+      "item": "mekanism:ultimate_control_circuit"
+    },
+    "P": {
+      "item": "mekanism:pellet_polonium"
+    },
+    "S": {
+      "item": "ae2:singularity"
+    },
+    "Q": {
+      "item": "ae2:quantum_ring"
+    }
+  },
+  "pattern": [
+    "PCP",
+    "QGQ",
+    "PSP"
+  ],
+  "result": {
+    "item": "pi_generator:generator_tier_5"
+  },
+  "show_notification": true
+}

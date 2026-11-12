@@ -1,0 +1,19 @@
+{
+  "itemGroup.pi_generator": "Project Infinity: Resource Generators",
+
+  "block.pi_generator.generator_tier_1": "Basic Resource Generator",
+  "block.pi_generator.generator_tier_2": "Advanced Resource Generator",
+  "block.pi_generator.generator_tier_3": "Elite Resource Generator",
+  "block.pi_generator.generator_tier_4": "Ultimate Resource Generator",
+  "block.pi_generator.generator_tier_5": "Quantum Resource Generator",
+  "block.pi_generator.generator_tier_6": "Cosmic Resource Generator",
+  "block.pi_generator.generator_tier_7": "Antimatter Resource Generator",
+  "block.pi_generator.generator_tier_8": "Infinity Resource Generator",
+
+  "tooltip.pi_generator.tier": "Tier %s",
+  "tooltip.pi_generator.usage": "Energy usage: %s FE/t",
+  "tooltip.pi_generator.buffer": "Energy buffer: %s FE",
+  "tooltip.pi_generator.cycle": "Cycle: %s ticks",
+
+  "message.pi_generator.status": "Generator Tier %s | Energy: %s / %s FE | Usage: %s FE/t"
+}

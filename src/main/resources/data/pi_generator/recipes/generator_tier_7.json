@@ -1,0 +1,97 @@
+{
+  "type": "forge:conditional",
+  "recipes": [
+    {
+      "conditions": [
+        {
+          "type": "pi_generator:recipe_serializer_exists",
+          "serializer": "avaritia:shaped_table"
+        },
+        {
+          "type": "forge:item_exists",
+          "item": "avaritia:neutron_ingot"
+        }
+      ],
+      "recipe": {
+        "type": "avaritia:shaped_table",
+        "category": "misc",
+        "key": {
+          "G": {
+            "item": "pi_generator:generator_tier_6"
+          },
+          "A": {
+            "item": "mekanism:pellet_antimatter"
+          },
+          "N": {
+            "item": "avaritia:neutron_ingot"
+          },
+          "S": {
+            "item": "ae2:singularity"
+          }
+        },
+        "pattern": [
+          "NNNNANNNN",
+          "NSAAAAASN",
+          "NANNNNNAN",
+          "NANSASNAN",
+          "AANAGANAA",
+          "NANSASNAN",
+          "NANNNNNAN",
+          "NSAAAAASN",
+          "NNNNANNNN"
+        ],
+        "result": {
+          "item": "pi_generator:generator_tier_7"
+        },
+        "show_notification": true,
+        "tier": 4
+      }
+    },
+    {
+      "conditions": [
+        {
+          "type": "pi_generator:recipe_serializer_exists",
+          "serializer": "avaritia:shaped_table"
+        },
+        {
+          "type": "forge:item_exists",
+          "item": "avaritia:neutronium_ingot"
+        }
+      ],
+      "recipe": {
+        "type": "avaritia:shaped_table",
+        "category": "misc",
+        "key": {
+          "G": {
+            "item": "pi_generator:generator_tier_6"
+          },
+          "A": {
+            "item": "mekanism:pellet_antimatter"
+          },
+          "N": {
+            "item": "avaritia:neutronium_ingot"
+          },
+          "S": {
+            "item": "ae2:singularity"
+          }
+        },
+        "pattern": [
+          "NNNNANNNN",
+          "NSAAAAASN",
+          "NANNNNNAN",
+          "NANSASNAN",
+          "AANAGANAA",
+          "NANSASNAN",
+          "NANNNNNAN",
+          "NSAAAAASN",
+          "NNNNANNNN"
+        ],
+        "result": {
+          "item": "pi_generator:generator_tier_7"
+        },
+        "show_notification": true,
+        "tier": 4
+      }
+    }
+  ]
+}

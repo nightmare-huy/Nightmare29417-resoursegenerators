@@ -1,0 +1,19 @@
+{
+  "itemGroup.pi_generator": "Project Infinity: Генераторы ресурсов",
+
+  "block.pi_generator.generator_tier_1": "Базовый генератор ресурсов",
+  "block.pi_generator.generator_tier_2": "Улучшенный генератор ресурсов",
+  "block.pi_generator.generator_tier_3": "Элитный генератор ресурсов",
+  "block.pi_generator.generator_tier_4": "Совершенный генератор ресурсов",
+  "block.pi_generator.generator_tier_5": "Квантовый генератор ресурсов",
+  "block.pi_generator.generator_tier_6": "Космический генератор ресурсов",
+  "block.pi_generator.generator_tier_7": "Антиматериальный генератор ресурсов",
+  "block.pi_generator.generator_tier_8": "Генератор ресурсов Бесконечности",
+
+  "tooltip.pi_generator.tier": "Уровень %s",
+  "tooltip.pi_generator.usage": "Потребление: %s FE/т",
+  "tooltip.pi_generator.buffer": "Буфер энергии: %s FE",
+  "tooltip.pi_generator.cycle": "Цикл: %s тик.",
+
+  "message.pi_generator.status": "Генератор, уровень %s | Заряд: %s / %s FE | Расход: %s FE/т"
+}

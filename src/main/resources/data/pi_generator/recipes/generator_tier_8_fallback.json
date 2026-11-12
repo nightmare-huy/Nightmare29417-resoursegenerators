@@ -1,0 +1,87 @@
+{
+  "type": "forge:conditional",
+  "recipes": [
+    {
+      "conditions": [
+        {
+          "type": "pi_generator:fallback_recipes"
+        },
+        {
+          "type": "forge:item_exists",
+          "item": "avaritia:neutron"
+        }
+      ],
+      "recipe": {
+        "type": "minecraft:crafting_shaped",
+        "category": "misc",
+        "key": {
+          "G": {
+            "item": "pi_generator:generator_tier_7"
+          },
+          "I": {
+            "item": "avaritia:infinity_ingot"
+          },
+          "C": {
+            "item": "avaritia:infinity_catalyst"
+          },
+          "N": {
+            "item": "avaritia:neutron"
+          },
+          "A": {
+            "item": "mekanism:pellet_antimatter"
+          }
+        },
+        "pattern": [
+          "NCN",
+          "IGI",
+          "ACA"
+        ],
+        "result": {
+          "item": "pi_generator:generator_tier_8"
+        },
+        "show_notification": true
+      }
+    },
+    {
+      "conditions": [
+        {
+          "type": "pi_generator:fallback_recipes"
+        },
+        {
+          "type": "forge:item_exists",
+          "item": "avaritia:neutronium_block"
+        }
+      ],
+      "recipe": {
+        "type": "minecraft:crafting_shaped",
+        "category": "misc",
+        "key": {
+          "G": {
+            "item": "pi_generator:generator_tier_7"
+          },
+          "I": {
+            "item": "avaritia:infinity_ingot"
+          },
+          "C": {
+            "item": "avaritia:infinity_catalyst"
+          },
+          "N": {
+            "item": "avaritia:neutronium_block"
+          },
+          "A": {
+            "item": "mekanism:pellet_antimatter"
+          }
+        },
+        "pattern": [
+          "NCN",
+          "IGI",
+          "ACA"
+        ],
+        "result": {
+          "item": "pi_generator:generator_tier_8"
+        },
+        "show_notification": true
+      }
+    }
+  ]
+}

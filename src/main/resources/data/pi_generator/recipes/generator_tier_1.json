@@ -1,0 +1,30 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "F": {
+      "item": "thermal:machine_frame"
+    },
+    "I": {
+      "item": "thermal:invar_ingot"
+    },
+    "C": {
+      "item": "mekanism:basic_control_circuit"
+    },
+    "R": {
+      "item": "thermal:rf_coil"
+    },
+    "O": {
+      "item": "mekanism:ingot_osmium"
+    }
+  },
+  "pattern": [
+    "ICI",
+    "OFO",
+    "IRI"
+  ],
+  "result": {
+    "item": "pi_generator:generator_tier_1"
+  },
+  "show_notification": true
+}
