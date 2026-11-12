@@ -1,0 +1,71 @@
+Downloading https://services.gradle.org/distributions/gradle-8.1.1-bin.zip
+...........10%............20%............30%............40%............50%............60%............70%............80%...........90%............100%
+
+Welcome to Gradle 8.1.1!
+
+Here are the highlights of this release:
+ - Stable configuration cache
+ - Experimental Kotlin DSL assignment syntax
+ - Building with Java 20
+
+For more details see https://docs.gradle.org/8.1.1/release-notes.html
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. See https://docs.gradle.org/8.1.1/userguide/gradle_daemon.html#sec:disabling_the_daemon.
+Daemon will be stopped at the end of the build 
+
+> Configure project :
+Java: 17.0.21, JVM: 17.0.21+9 (Eclipse Adoptium), Arch: amd64
+
+> Task :compileJava
+Setting up MCP environment
+Initializing steps
+Executing steps
+ > Running 'downloadManifest'
+ > Running 'downloadJson'
+ > Running 'downloadClient'
+ > Running 'downloadServer'
+ > Running 'extractServer'
+ > Running 'downloadClientMappings'
+ > Running 'mergeMappings'
+ > Running 'stripClient'
+ > Running 'stripServer'
+ > Running 'merge'
+ > Running 'listLibraries'
+ > Running 'rename'
+Stopping at requested step: /home/runner/.gradle/caches/forge_gradle/mcp_repo/de/oceanlabs/mcp/mcp_config/1.20.1-20230612.114412/joined/rename/output.jar
+[13:43:08] [main/INFO]: Writing debug log file accesstransform.log
+[13:43:08] [main/INFO]: Access Transformer processor running version 8.2.14
+[13:43:08] [main/INFO]: Command line arguments [--inJar, /home/runner/.gradle/caches/forge_gradle/minecraft_user_repo/net/minecraftforge/forge/1.20.1-47.2.20/forge-1.20.1-47.2.20-injected.jar, --outJar, /home/runner/.gradle/caches/forge_gradle/minecraft_user_repo/net/minecraftforge/forge/1.20.1-47.2.20_mapped_official_1.20.1/forge-1.20.1-47.2.20_mapped_official_1.20.1.jar, --logFile, accesstransform.log, --atFile, /home/runner/work/Nightmare29417-resoursegenerators/Nightmare29417-resoursegenerators/build/_atJar_4/parent_at.cfg]
+[13:43:08] [main/INFO]: Reading from /home/runner/.gradle/caches/forge_gradle/minecraft_user_repo/net/minecraftforge/forge/1.20.1-47.2.20/forge-1.20.1-47.2.20-injected.jar
+[13:43:08] [main/INFO]: Writing to /home/runner/.gradle/caches/forge_gradle/minecraft_user_repo/net/minecraftforge/forge/1.20.1-47.2.20_mapped_official_1.20.1/forge-1.20.1-47.2.20_mapped_official_1.20.1.jar
+[13:43:08] [main/INFO]: Transformer file /home/runner/work/Nightmare29417-resoursegenerators/Nightmare29417-resoursegenerators/build/_atJar_4/parent_at.cfg
+[13:43:08] [main/WARN]: Found existing output jar /home/runner/.gradle/caches/forge_gradle/minecraft_user_repo/net/minecraftforge/forge/1.20.1-47.2.20_mapped_official_1.20.1/forge-1.20.1-47.2.20_mapped_official_1.20.1.jar, overwriting
+[13:43:12] [main/INFO]: JAR transformation complete /home/runner/.gradle/caches/forge_gradle/minecraft_user_repo/net/minecraftforge/forge/1.20.1-47.2.20_mapped_official_1.20.1/forge-1.20.1-47.2.20_mapped_official_1.20.1.jar
+Creating SRG -> MCP TSRG
+Note: /home/runner/work/Nightmare29417-resoursegenerators/Nightmare29417-resoursegenerators/src/main/java/com/projectinfinity/pigenerator/block/GeneratorBlock.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+> Task :processResources
+> Task :classes
+> Task :jar
+> Task :downloadMcpConfig
+> Task :extractSrg
+> Task :createMcpToSrg
+> Task :reobfJar
+> Task :jarJar SKIPPED
+> Task :reobfJarJar SKIPPED
+> Task :assemble
+> Task :compileTestJava NO-SOURCE
+> Task :processTestResources NO-SOURCE
+> Task :testClasses UP-TO-DATE
+> Task :test NO-SOURCE
+> Task :check UP-TO-DATE
+> Task :build
+
+BUILD SUCCESSFUL in 2m 11s
+7 actionable tasks: 7 executed
+total 64
+drwxr-xr-x  2 runner runner  4096 Nov 12 13:43 .
+drwxr-xr-x 16 runner runner  4096 Nov 12 13:43 ..
+-rw-r--r--  1 runner runner 56050 Nov 12 13:43 pi_generator-0.1.jar
+8f3d2682ecf195dfd820b4099f116d08a18d35e442ac4924f5eb62fc622eb315  build/libs/pi_generator-0.1.jar
