@@ -4,7 +4,8 @@
     python3 scripts/generate_resources.py
 
 Writes into src/main/resources:
-  * assets/pi_generator/textures/block/generator_tier_N.png   (16x16, tier 8 is an animated strip)
+  * assets/pi_generator/textures/block/generator_tier_N.png   (16x16 animated strips, 16 frames each)
+  * assets/pi_generator/textures/block/generator_tier_N.png.mcmeta
   * assets/pi_generator/{blockstates,models/block,models/item}/generator_tier_N.json
   * data/pi_generator/loot_tables/blocks/generator_tier_N.json
   * data/pi_generator/recipes/*.json
@@ -41,7 +42,7 @@ def write_json(path, obj):
 
 # --------------------------------------------------------------------------- textures
 
-# Accent colour per tier: grey -> green -> aqua -> blue -> yellow -> orange -> red -> (animated) purple
+# Accent colour per tier: grey -> green -> aqua -> blue -> yellow -> orange -> red -> (shimmering) purple
 ACCENTS = {
     1: (0x9E, 0xA3, 0xA8),
     2: (0x4C, 0xC0, 0x5A),
@@ -53,7 +54,10 @@ ACCENTS = {
     8: (0xB0, 0x4C, 0xF0),
 }
 STEEL = (0x6E, 0x72, 0x78)
-T8_FRAMES = 16
+FRAMES = 16  # animation frames per texture (stacked vertically in the PNG)
+# Ticks per animation frame: the higher tiers pulse twice as fast.
+FRAMETIME = {1: 4, 2: 4, 3: 4, 4: 4, 5: 2, 6: 2, 7: 2, 8: 2}
+WHITE = (255, 255, 255)
 
 
 def clamp(v):
@@ -91,11 +95,16 @@ def core_colour(tier, x, y, frame):
     glow = 1.35 - 0.22 * (dist - 0.5)
     if tier == 8:
         # shimmering: the hue travels diagonally through purple / magenta / blue / cyan
-        phase = (frame / T8_FRAMES + (x + y) / 14.0) % 1.0
+        phase = (frame / FRAMES + (x + y) / 14.0) % 1.0
         hue = 0.62 + 0.30 * (0.5 + 0.5 * math.sin(phase * 2 * math.pi))
         r, g, b = colorsys.hsv_to_rgb(hue % 1.0, 0.62, 1.0)
         return mul((r * 255, g * 255, b * 255), 0.78 + 0.22 * (glow - 0.9) / 0.45)
-    return mul(ACCENTS[tier], glow * 0.82)
+    # tiers 1-7: a pulse that travels from the centre of the core to its edge
+    ring = dist - 0.5  # 0 (centre), 1, 2 (edge)
+    wave = 0.5 + 0.5 * math.cos(2 * math.pi * (frame / FRAMES - ring / 4.0))
+    strength = 0.75 + 0.05 * tier  # higher tiers flare up more
+    colour = mul(ACCENTS[tier], glow * (0.62 + 0.34 * wave * strength))
+    return mix(colour, WHITE, 0.30 * wave * strength * (1.0 - ring / 2.5))
 
 
 def texture_frame(tier, frame=0):
@@ -122,9 +131,12 @@ def texture_frame(tier, frame=0):
                     px = core_colour(tier, x, y, frame)
             if y == 13 and 4 <= x <= 11:                    # tier pips: N of 8 lit
                 lit = (x - 4) < tier
-                px = mul(accent, 1.15) if lit else mul(casing, 0.40)
+                # a highlight runs along the lit pips, left to right
+                chase = max(0.0, math.cos(2 * math.pi * (frame / FRAMES - (x - 4) / 8.0)))
+                px = mix(mul(accent, 0.95), WHITE, 0.45 * chase) if lit else mul(casing, 0.40)
                 if tier == 8:
-                    r, g, b = colorsys.hsv_to_rgb((0.70 + 0.2 * ((x - 4) / 8.0 + frame / T8_FRAMES)) % 1.0, 0.55, 1.0)
+                    hue = 0.78 + 0.10 * math.sin(2 * math.pi * (frame / FRAMES - (x - 4) / 8.0))
+                    r, g, b = colorsys.hsv_to_rgb(hue % 1.0, 0.55, 1.0)
                     px = (clamp(r * 255), clamp(g * 255), clamp(b * 255))
             row.append(px)
         rows.append(row)
@@ -135,14 +147,11 @@ def generate_textures():
     tex_dir = os.path.join(ASSETS, "textures", "block")
     for tier in TIERS:
         path = os.path.join(tex_dir, f"generator_tier_{tier}.png")
-        if tier == 8:
-            rows = []
-            for frame in range(T8_FRAMES):
-                rows.extend(texture_frame(tier, frame))
-            write_png(path, SIZE, SIZE * T8_FRAMES, rows)
-            write_json(path + ".mcmeta", {"animation": {"frametime": 2, "interpolate": True}})
-        else:
-            write_png(path, SIZE, SIZE, texture_frame(tier))
+        rows = []
+        for frame in range(FRAMES):
+            rows.extend(texture_frame(tier, frame))
+        write_png(path, SIZE, SIZE * FRAMES, rows)
+        write_json(path + ".mcmeta", {"animation": {"frametime": FRAMETIME[tier], "interpolate": True}})
 
 
 # --------------------------------------------------------------------------- models / blockstates / loot
