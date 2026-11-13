@@ -1,0 +1,14 @@
+{
+  "replace": false,
+  "values": [
+    "pi_generator:generator_tier_1",
+    "pi_generator:generator_tier_2",
+    "pi_generator:generator_tier_3",
+    "pi_generator:generator_tier_4",
+    "pi_generator:generator_tier_5",
+    "pi_generator:generator_tier_6",
+    "pi_generator:generator_tier_7",
+    "pi_generator:generator_tier_8",
+    "pi_generator:energy_storage"
+  ]
+}

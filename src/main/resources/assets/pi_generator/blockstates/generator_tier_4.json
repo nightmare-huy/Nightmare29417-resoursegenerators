@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "pi_generator:block/generator_tier_4"
+    }
+  }
+}

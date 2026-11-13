@@ -1,0 +1,163 @@
+{
+  "multipart": [
+    {
+      "when": {
+        "north": "input"
+      },
+      "apply": {
+        "model": "pi_generator:block/energy_storage_input"
+      }
+    },
+    {
+      "when": {
+        "north": "output"
+      },
+      "apply": {
+        "model": "pi_generator:block/energy_storage_output"
+      }
+    },
+    {
+      "when": {
+        "north": "off"
+      },
+      "apply": {
+        "model": "pi_generator:block/energy_storage_off"
+      }
+    },
+    {
+      "when": {
+        "east": "input"
+      },
+      "apply": {
+        "model": "pi_generator:block/energy_storage_input",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "east": "output"
+      },
+      "apply": {
+        "model": "pi_generator:block/energy_storage_output",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "east": "off"
+      },
+      "apply": {
+        "model": "pi_generator:block/energy_storage_off",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "south": "input"
+      },
+      "apply": {
+        "model": "pi_generator:block/energy_storage_input",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "south": "output"
+      },
+      "apply": {
+        "model": "pi_generator:block/energy_storage_output",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "south": "off"
+      },
+      "apply": {
+        "model": "pi_generator:block/energy_storage_off",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "west": "input"
+      },
+      "apply": {
+        "model": "pi_generator:block/energy_storage_input",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "west": "output"
+      },
+      "apply": {
+        "model": "pi_generator:block/energy_storage_output",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "west": "off"
+      },
+      "apply": {
+        "model": "pi_generator:block/energy_storage_off",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "up": "input"
+      },
+      "apply": {
+        "model": "pi_generator:block/energy_storage_input",
+        "x": 270
+      }
+    },
+    {
+      "when": {
+        "up": "output"
+      },
+      "apply": {
+        "model": "pi_generator:block/energy_storage_output",
+        "x": 270
+      }
+    },
+    {
+      "when": {
+        "up": "off"
+      },
+      "apply": {
+        "model": "pi_generator:block/energy_storage_off",
+        "x": 270
+      }
+    },
+    {
+      "when": {
+        "down": "input"
+      },
+      "apply": {
+        "model": "pi_generator:block/energy_storage_input",
+        "x": 90
+      }
+    },
+    {
+      "when": {
+        "down": "output"
+      },
+      "apply": {
+        "model": "pi_generator:block/energy_storage_output",
+        "x": 90
+      }
+    },
+    {
+      "when": {
+        "down": "off"
+      },
+      "apply": {
+        "model": "pi_generator:block/energy_storage_off",
+        "x": 90
+      }
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "pi_generator:item/speed_upgrade_2"
+  }
+}

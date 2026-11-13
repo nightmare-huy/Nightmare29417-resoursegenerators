@@ -1,0 +1,43 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "pi_generator:core_recipes"
+    },
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "ae2"
+    },
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "mekanism"
+    }
+  ],
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "P": {
+      "item": "mekanism:pellet_plutonium"
+    },
+    "D": {
+      "item": "minecraft:diamond_block"
+    },
+    "N": {
+      "item": "minecraft:netherite_block"
+    },
+    "K": {
+      "item": "ae2:cell_component_256k"
+    },
+    "S": {
+      "item": "minecraft:nether_star"
+    }
+  },
+  "pattern": [
+    "PDP",
+    "NSK",
+    "PDP"
+  ],
+  "result": {
+    "count": 1,
+    "id": "pi_generator:crystal_core"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "mekanism"
+    }
+  ],
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "F": {
+      "item": "mekanism:steel_casing"
+    },
+    "S": {
+      "item": "mekanism:ingot_steel"
+    },
+    "C": {
+      "item": "mekanism:basic_control_circuit"
+    },
+    "T": {
+      "item": "mekanism:energy_tablet"
+    },
+    "O": {
+      "item": "mekanism:ingot_osmium"
+    }
+  },
+  "pattern": [
+    "SCS",
+    "OFO",
+    "STS"
+  ],
+  "result": {
+    "count": 1,
+    "id": "pi_generator:generator_tier_1"
+  }
+}

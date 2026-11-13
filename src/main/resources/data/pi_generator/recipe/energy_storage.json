@@ -1,0 +1,37 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "ae2"
+    },
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "mekanism"
+    }
+  ],
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "U": {
+      "item": "mekanism:ultimate_energy_cube"
+    },
+    "I": {
+      "item": "mekanism:ultimate_induction_cell"
+    },
+    "D": {
+      "item": "ae2:dense_energy_cell"
+    },
+    "A": {
+      "item": "mekanism:pellet_antimatter"
+    }
+  },
+  "pattern": [
+    "AIA",
+    "DUD",
+    "AIA"
+  ],
+  "result": {
+    "count": 1,
+    "id": "pi_generator:energy_storage"
+  }
+}
