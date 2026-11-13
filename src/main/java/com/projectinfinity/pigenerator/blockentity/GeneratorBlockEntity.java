@@ -36,6 +36,7 @@ import java.util.List;
  *
  * <ul>
  *   <li>Forge Energy input on every side (and for the {@code null} side) without a transfer limit.</li>
+ *   <li>Every operation makes one of the tier's outputs, picked at random with equal chances.</li>
  *   <li>27 slot output buffer exposed as an (extract only) item handler on every side.</li>
  *   <li>Generated items are pushed straight into adjacent inventories (ME interfaces, chests, pipes);
  *       only what does not fit is kept in the buffer and retried periodically.</li>
@@ -52,6 +53,8 @@ public class GeneratorBlockEntity extends BlockEntity {
     private static final String TAG_ENERGY = "Energy";
     private static final String TAG_PROGRESS = "Progress";
     private static final String TAG_OUTPUT_INDEX = "OutputIndex";
+    /** Value of {@link #outputIndex} while nothing has been picked yet. */
+    private static final int NOT_PICKED = -1;
     private static final String TAG_INVENTORY = "Inventory";
     private static final String TAG_FILTER = "Filter";
     private static final String TAG_UPGRADES = "Upgrades";
@@ -70,7 +73,11 @@ public class GeneratorBlockEntity extends BlockEntity {
     private LazyOptional<IItemHandler> itemCapability;
 
     private int progress;
-    private int outputIndex;
+    /**
+     * Index in {@link #getActiveOutputs()} of the item the current operation makes, picked at random when
+     * the operation starts. Saved, so that an operation in progress still ends with the same item after a reload.
+     */
+    private int outputIndex = NOT_PICKED;
     private int flushTimer;
     /** Set while the buffer has no room for the next output (shown in the screen). */
     private boolean bufferFull;
@@ -152,7 +159,7 @@ public class GeneratorBlockEntity extends BlockEntity {
     private void installedItemChanged(int slot) {
         if (slot == InstalledItemsHandler.FILTER_SLOT) {
             activeOutputs = null;
-            outputIndex = 0;
+            outputIndex = NOT_PICKED; // the list has changed, the index would point at another item
         } else {
             applyUpgrades();
         }
@@ -280,8 +287,8 @@ public class GeneratorBlockEntity extends BlockEntity {
             bufferFull = false;
             return; // nothing to make (filtered out or not present in this instance): idle, no energy is used
         }
-        if (outputIndex >= outputs.size()) {
-            outputIndex = 0;
+        if (outputIndex < 0 || outputIndex >= outputs.size()) {
+            outputIndex = pickOutput(level, outputs);
         }
 
         // One step per tick, more with a speed upgrade. With too little power it simply does fewer steps.
@@ -304,7 +311,7 @@ public class GeneratorBlockEntity extends BlockEntity {
 
             if (++progress >= tier.getCycleTicks()) {
                 progress = 0;
-                outputIndex = (outputIndex + 1) % outputs.size();
+                outputIndex = pickOutput(level, outputs);
                 deliver(output, level, pos);
                 output = null;
             }
@@ -312,6 +319,11 @@ public class GeneratorBlockEntity extends BlockEntity {
         if (worked) {
             markDirty();
         }
+    }
+
+    /** Index of a random output; every output of the list has the same chance, whatever was made before. */
+    private static int pickOutput(Level level, List<Item> outputs) {
+        return outputs.size() > 1 ? level.random.nextInt(outputs.size()) : 0;
     }
 
     /** One operation's worth of the item. The count can exceed the item's maximum stack size. */
@@ -469,7 +481,7 @@ public class GeneratorBlockEntity extends BlockEntity {
         super.load(tag);
         energy.setEnergy(tag.getInt(TAG_ENERGY));
         progress = Math.max(0, tag.getInt(TAG_PROGRESS));
-        outputIndex = Math.max(0, tag.getInt(TAG_OUTPUT_INDEX));
+        outputIndex = tag.contains(TAG_OUTPUT_INDEX) ? tag.getInt(TAG_OUTPUT_INDEX) : NOT_PICKED;
         if (tag.contains(TAG_INVENTORY)) {
             CompoundTag inventoryTag = tag.getCompound(TAG_INVENTORY).copy();
             inventoryTag.putInt("Size", SLOTS); // the buffer size is fixed, ignore whatever was saved
