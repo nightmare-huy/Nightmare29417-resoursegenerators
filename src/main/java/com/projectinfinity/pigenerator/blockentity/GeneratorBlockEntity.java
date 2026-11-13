@@ -36,7 +36,8 @@ import java.util.List;
  *
  * <ul>
  *   <li>Forge Energy input on every side (and for the {@code null} side) without a transfer limit.</li>
- *   <li>Every operation makes one of the tier's outputs, picked at random with equal chances.</li>
+ *   <li>Every operation makes one of the tier's outputs, picked at random by the weights of the outputs
+ *       (see {@link GeneratorTier#getWeight}): valuable items come less often than cheap ones.</li>
  *   <li>27 slot output buffer exposed as an (extract only) item handler on every side.</li>
  *   <li>Generated items are pushed straight into adjacent inventories (ME interfaces, chests, pipes);
  *       only what does not fit is kept in the buffer and retried periodically.</li>
@@ -93,6 +94,11 @@ public class GeneratorBlockEntity extends BlockEntity {
     /** The tier's outputs that pass the filter; {@code null} until computed or after the filter changed. */
     @Nullable
     private List<Item> activeOutputs;
+    /**
+     * Running totals of the weights of {@link #activeOutputs}: output {@code i} is picked when a random
+     * number below the last total falls into {@code [totals[i - 1], totals[i])}.
+     */
+    private int[] weightTotals = new int[0];
 
     /** Work steps per tick (speed upgrade). A step is what the generator does in one tick without upgrades. */
     private int stepsPerTick = 1;
@@ -265,6 +271,13 @@ public class GeneratorBlockEntity extends BlockEntity {
                 }
                 outputs = allowed;
             }
+            int[] totals = new int[outputs.size()];
+            int total = 0;
+            for (int i = 0; i < totals.length; i++) {
+                total += tier.getWeight(outputs.get(i));
+                totals[i] = total;
+            }
+            weightTotals = totals;
             activeOutputs = outputs;
         }
         return outputs;
@@ -288,7 +301,7 @@ public class GeneratorBlockEntity extends BlockEntity {
             return; // nothing to make (filtered out or not present in this instance): idle, no energy is used
         }
         if (outputIndex < 0 || outputIndex >= outputs.size()) {
-            outputIndex = pickOutput(level, outputs);
+            outputIndex = pickOutput(level);
         }
 
         // One step per tick, more with a speed upgrade. With too little power it simply does fewer steps.
@@ -311,7 +324,7 @@ public class GeneratorBlockEntity extends BlockEntity {
 
             if (++progress >= tier.getCycleTicks()) {
                 progress = 0;
-                outputIndex = pickOutput(level, outputs);
+                outputIndex = pickOutput(level);
                 deliver(output, level, pos);
                 output = null;
             }
@@ -321,9 +334,23 @@ public class GeneratorBlockEntity extends BlockEntity {
         }
     }
 
-    /** Index of a random output; every output of the list has the same chance, whatever was made before. */
-    private static int pickOutput(Level level, List<Item> outputs) {
-        return outputs.size() > 1 ? level.random.nextInt(outputs.size()) : 0;
+    /**
+     * Index of a random active output. The chance of an output is its weight divided by the sum of the
+     * weights of all active outputs, whatever was made before. Only called while there are active outputs.
+     */
+    private int pickOutput(Level level) {
+        int[] totals = weightTotals;
+        int last = totals.length - 1;
+        if (last <= 0) {
+            return 0;
+        }
+        int roll = level.random.nextInt(totals[last]);
+        for (int i = 0; i < last; i++) {
+            if (roll < totals[i]) {
+                return i;
+            }
+        }
+        return last;
     }
 
     /** One operation's worth of the item. The count can exceed the item's maximum stack size. */

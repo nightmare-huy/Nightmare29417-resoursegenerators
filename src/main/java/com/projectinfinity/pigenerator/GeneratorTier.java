@@ -8,10 +8,10 @@ import net.minecraft.world.item.Rarity;
 import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
+import java.util.Map;
 
 /**
  * Parameters of the eight generator stages.
@@ -20,43 +20,48 @@ import java.util.Set;
  * other mod is needed at compile time. Ids of mods that are not installed are silently skipped.
  * An entry may list several alternatives separated by {@code |}: the first id that exists is used
  * (covers ports of a mod that name the same item differently).</p>
+ *
+ * <p>Every entry ends with {@code =weight}. A generator picks what to make at random and the chance of an
+ * item is its weight divided by the sum of the weights of everything it could make, so the valuable items
+ * (low weights) come less often than the cheap ones. The weights can be changed in the config, see
+ * {@link PiConfig#outputWeights()}.</p>
  */
 public enum GeneratorTier {
     TIER_1(1, 256, 100_000, 40, false, Inherit.NONE, Rarity.COMMON, ChatFormatting.GRAY,
             // vanilla base ores
-            "minecraft:coal", "minecraft:raw_iron", "minecraft:raw_copper", "minecraft:raw_gold",
-            "minecraft:redstone", "minecraft:lapis_lazuli", "minecraft:diamond", "minecraft:emerald",
-            "minecraft:quartz",
+            "minecraft:coal=10", "minecraft:raw_iron=10", "minecraft:raw_copper=10", "minecraft:raw_gold=6",
+            "minecraft:redstone=8", "minecraft:lapis_lazuli=8", "minecraft:diamond=2", "minecraft:emerald=2",
+            "minecraft:quartz=8",
             // modded base ores
-            "thermal:apatite", "mekanism:raw_osmium", "thermal:raw_tin", "thermal:raw_lead",
-            "thermal:raw_silver", "thermal:raw_nickel"),
+            "thermal:apatite=8", "mekanism:raw_osmium=8", "thermal:raw_tin=10", "thermal:raw_lead=8",
+            "thermal:raw_silver=6", "thermal:raw_nickel=6"),
 
     TIER_2(2, 1_024, 500_000, 35, false, Inherit.PREVIOUS, Rarity.COMMON, ChatFormatting.GREEN,
-            "mekanism:ingot_steel", "thermal:invar_ingot", "thermal:electrum_ingot",
-            "ae2:certus_quartz_crystal"),
+            "mekanism:ingot_steel=4", "thermal:invar_ingot=4", "thermal:electrum_ingot=3",
+            "ae2:certus_quartz_crystal=8"),
 
     TIER_3(3, 8_192, 2_000_000, 30, false, Inherit.NONE, Rarity.UNCOMMON, ChatFormatting.AQUA,
-            "ae2:fluix_crystal", "thermal:signalum_ingot", "thermal:lumium_ingot",
-            "mekanism:alloy_infused", "mekanism:ingot_refined_obsidian"),
+            "ae2:fluix_crystal=10", "thermal:signalum_ingot=5", "thermal:lumium_ingot=5",
+            "mekanism:alloy_infused=8", "mekanism:ingot_refined_obsidian=3"),
 
     TIER_4(4, 65_536, 10_000_000, 20, false, Inherit.NONE, Rarity.UNCOMMON, ChatFormatting.BLUE,
-            "thermal:enderium_ingot", "mekanism:alloy_reinforced", "ae2:calculation_processor",
-            "ae2:engineering_processor", "ae2:logic_processor", "mekanism:raw_uranium"),
+            "thermal:enderium_ingot=3", "mekanism:alloy_reinforced=6", "ae2:calculation_processor=8",
+            "ae2:engineering_processor=8", "ae2:logic_processor=8", "mekanism:raw_uranium=6"),
 
     TIER_5(5, 524_288, 50_000_000, 15, false, Inherit.NONE, Rarity.RARE, ChatFormatting.YELLOW,
-            "mekanism:alloy_atomic", "mekanism:ultimate_control_circuit", "ae2:singularity",
-            "minecraft:nether_star"),
+            "mekanism:alloy_atomic=8", "mekanism:ultimate_control_circuit=5", "ae2:singularity=3",
+            "minecraft:nether_star=1"),
 
     TIER_6(6, 4_194_304, 500_000_000, 10, false, Inherit.NONE, Rarity.RARE, ChatFormatting.GOLD,
-            "mekanism:pellet_polonium", "mekanism:pellet_plutonium", "avaritia:crystal_matrix_ingot"),
+            "mekanism:pellet_polonium=6", "mekanism:pellet_plutonium=6", "avaritia:crystal_matrix_ingot=2"),
 
     TIER_7(7, 67_108_864, 2_000_000_000, 5, false, Inherit.NONE, Rarity.EPIC, ChatFormatting.RED,
-            "mekanism:pellet_antimatter", "avaritia:neutron_pile", "avaritia:neutron_nugget"),
+            "mekanism:pellet_antimatter=2", "avaritia:neutron_pile=8", "avaritia:neutron_nugget=4"),
 
     TIER_8(8, 1_000_000_000, Integer.MAX_VALUE, 1, true, Inherit.ALL_PREVIOUS, Rarity.EPIC, ChatFormatting.LIGHT_PURPLE,
             // Re-Avaritia registers the neutronium ingot as "avaritia:neutron_ingot"
-            "avaritia:neutronium_ingot|avaritia:neutron_ingot", "avaritia:infinity_catalyst",
-            "mekanism:pellet_antimatter");
+            "avaritia:neutronium_ingot|avaritia:neutron_ingot=2", "avaritia:infinity_catalyst=1",
+            "mekanism:pellet_antimatter=2");
 
     /** Which lower tiers contribute their outputs to this tier. */
     private enum Inherit {
@@ -71,10 +76,15 @@ public enum GeneratorTier {
     private final Inherit inherit;
     private final Rarity rarity;
     private final ChatFormatting color;
-    private final List<String> ownOutputs;
+    /** Entry (ids separated by {@code |}) to weight, in the order they were listed. */
+    private final Map<String, Integer> ownOutputs;
 
     /** Resolved lazily on first use (registries are complete long before the first block entity tick). */
-    private volatile List<Item> resolvedOutputs;
+    private volatile Outputs resolvedOutputs;
+
+    /** The items of a tier in list order and the (positive) weight of each of them. */
+    private record Outputs(List<Item> items, Map<Item, Integer> weights) {
+    }
 
     GeneratorTier(int level, int energyPerTick, int capacity, int cycleTicks, boolean fullStacks,
                   Inherit inherit, Rarity rarity, ChatFormatting color, String... ownOutputs) {
@@ -86,7 +96,12 @@ public enum GeneratorTier {
         this.inherit = inherit;
         this.rarity = rarity;
         this.color = color;
-        this.ownOutputs = List.of(ownOutputs);
+        Map<String, Integer> entries = new LinkedHashMap<>();
+        for (String entry : ownOutputs) {
+            int separator = entry.lastIndexOf('=');
+            entries.put(entry.substring(0, separator), Integer.parseInt(entry.substring(separator + 1)));
+        }
+        this.ownOutputs = entries;
     }
 
     /** 1..8 */
@@ -137,31 +152,49 @@ public enum GeneratorTier {
         return color;
     }
 
-    /** Output ids of this tier including inherited ones, in generation order and without duplicates. */
-    public List<String> getOutputIds() {
-        Set<String> ids = new LinkedHashSet<>();
+    /**
+     * Output entries of this tier including the inherited ones, in list order and without duplicates, with
+     * their weights. The weight a tier gives to an entry itself replaces the inherited one.
+     */
+    private Map<String, Integer> getOutputEntries() {
+        Map<String, Integer> entries = new LinkedHashMap<>();
         GeneratorTier[] tiers = values();
         switch (inherit) {
             case PREVIOUS -> {
                 if (ordinal() > 0) {
-                    ids.addAll(tiers[ordinal() - 1].getOutputIds());
+                    entries.putAll(tiers[ordinal() - 1].getOutputEntries());
                 }
             }
             case ALL_PREVIOUS -> {
                 for (int i = 0; i < ordinal(); i++) {
-                    ids.addAll(tiers[i].getOutputIds());
+                    entries.putAll(tiers[i].getOutputEntries());
                 }
             }
             default -> {
             }
         }
-        ids.addAll(ownOutputs);
-        return List.copyOf(ids);
+        entries.putAll(ownOutputs);
+        return entries;
     }
 
-    /** Items this tier can generate in the current instance (only items that are actually registered). */
+    /**
+     * Items this tier can generate in the current instance: only items that are actually registered and
+     * whose weight is not zero.
+     */
     public List<Item> getOutputs() {
-        List<Item> outputs = resolvedOutputs;
+        return outputs().items();
+    }
+
+    /**
+     * Weight of the item among the outputs of this tier, 0 if the tier does not make it. The chance of an
+     * item is its weight divided by the sum of the weights of all items the generator may make.
+     */
+    public int getWeight(Item item) {
+        return outputs().weights().getOrDefault(item, 0);
+    }
+
+    private Outputs outputs() {
+        Outputs outputs = resolvedOutputs;
         if (outputs == null) {
             outputs = resolveOutputs();
             resolvedOutputs = outputs;
@@ -169,22 +202,29 @@ public enum GeneratorTier {
         return outputs;
     }
 
-    private List<Item> resolveOutputs() {
-        Set<Item> items = new LinkedHashSet<>();
+    private Outputs resolveOutputs() {
+        Map<ResourceLocation, Integer> configured = PiConfig.outputWeights();
+        Map<Item, Integer> weights = new LinkedHashMap<>();
         List<String> missing = new ArrayList<>();
-        for (String entry : getOutputIds()) {
-            Item item = resolve(entry);
-            if (item != null) {
-                items.add(item);
+        for (Map.Entry<String, Integer> entry : getOutputEntries().entrySet()) {
+            Item item = resolve(entry.getKey());
+            if (item == null) {
+                missing.add(entry.getKey());
+                continue;
+            }
+            Integer override = configured.get(ForgeRegistries.ITEMS.getKey(item));
+            int weight = override != null ? override : entry.getValue();
+            if (weight > 0) {
+                weights.put(item, weight);
             } else {
-                missing.add(entry);
+                weights.remove(item); // weight 0: never made
             }
         }
         if (!missing.isEmpty()) {
             PiGenerator.LOGGER.info("{}: skipping outputs that are not registered (mod not installed?): {}", this, missing);
         }
-        PiGenerator.LOGGER.debug("{}: resolved {} output item(s)", this, items.size());
-        return List.copyOf(items);
+        PiGenerator.LOGGER.debug("{}: resolved {} output item(s): {}", this, weights.size(), weights);
+        return new Outputs(List.copyOf(weights.keySet()), Map.copyOf(weights));
     }
 
     /** Returns the first registered item among the {@code |}-separated alternatives, or {@code null}. */
