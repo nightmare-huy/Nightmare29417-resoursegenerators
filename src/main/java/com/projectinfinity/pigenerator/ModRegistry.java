@@ -3,6 +3,8 @@ package com.projectinfinity.pigenerator;
 import com.projectinfinity.pigenerator.block.GeneratorBlock;
 import com.projectinfinity.pigenerator.blockentity.GeneratorBlockEntity;
 import com.projectinfinity.pigenerator.item.ResourceFilterItem;
+import com.projectinfinity.pigenerator.item.UpgradeItem;
+import com.projectinfinity.pigenerator.upgrade.UpgradeType;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.BlockItem;
@@ -16,11 +18,13 @@ import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 
-/** All registry entries of the mod: 8 blocks, 8 block items, the filter item, the block entity type and the creative tab. */
+/** All registry entries of the mod: 8 blocks and their items, the filter, 12 upgrades, the block entity type and the creative tab. */
 public final class ModRegistry {
     public static final DeferredRegister<Block> BLOCKS =
             DeferredRegister.create(ForgeRegistries.BLOCKS, PiGenerator.MODID);
@@ -52,6 +56,20 @@ public final class ModRegistry {
     public static final RegistryObject<ResourceFilterItem> RESOURCE_FILTER =
             ITEMS.register("resource_filter", ResourceFilterItem::new);
 
+    /** speed / efficiency / energy upgrades, tiers 1..4 of each, in creative tab order. */
+    public static final List<RegistryObject<UpgradeItem>> UPGRADES;
+
+    static {
+        List<RegistryObject<UpgradeItem>> upgrades = new ArrayList<>();
+        for (UpgradeType type : UpgradeType.values()) {
+            for (int tier = 1; tier <= UpgradeType.TIERS; tier++) {
+                int upgradeTier = tier;
+                upgrades.add(ITEMS.register(UpgradeItem.registryName(type, tier), () -> new UpgradeItem(type, upgradeTier)));
+            }
+        }
+        UPGRADES = Collections.unmodifiableList(upgrades);
+    }
+
     /** One block entity type shared by all tiers; the tier is taken from the block. */
     public static final RegistryObject<BlockEntityType<GeneratorBlockEntity>> GENERATOR_BLOCK_ENTITY =
             BLOCK_ENTITY_TYPES.register("generator", () -> BlockEntityType.Builder.of(
@@ -66,6 +84,7 @@ public final class ModRegistry {
                     .displayItems((parameters, output) -> {
                         GENERATOR_ITEMS.values().forEach(item -> output.accept(item.get()));
                         output.accept(RESOURCE_FILTER.get());
+                        UPGRADES.forEach(upgrade -> output.accept(upgrade.get()));
                     })
                     .build());
 

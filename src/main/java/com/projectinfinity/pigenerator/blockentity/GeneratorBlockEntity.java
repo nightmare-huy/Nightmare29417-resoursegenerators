@@ -6,6 +6,8 @@ import com.projectinfinity.pigenerator.block.GeneratorBlock;
 import com.projectinfinity.pigenerator.energy.GeneratorEnergyStorage;
 import com.projectinfinity.pigenerator.item.OutputOnlyItemHandler;
 import com.projectinfinity.pigenerator.item.ResourceFilterItem;
+import com.projectinfinity.pigenerator.item.UpgradeItem;
+import com.projectinfinity.pigenerator.upgrade.UpgradeType;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -29,6 +31,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -40,6 +43,7 @@ import java.util.List;
  *   <li>Generated items are pushed straight into adjacent inventories (ME interfaces, chests, pipes);
  *       only what does not fit is kept in the buffer and retried periodically.</li>
  *   <li>An optional {@link ResourceFilterItem resource filter} limits which of the tier's outputs are made.</li>
+ *   <li>Up to three {@link UpgradeItem upgrades}, one per {@link UpgradeType}: speed, efficiency, energy.</li>
  * </ul>
  */
 public class GeneratorBlockEntity extends BlockEntity {
@@ -52,6 +56,7 @@ public class GeneratorBlockEntity extends BlockEntity {
     private static final String TAG_OUTPUT_INDEX = "OutputIndex";
     private static final String TAG_INVENTORY = "Inventory";
     private static final String TAG_FILTER = "Filter";
+    private static final String TAG_UPGRADES = "Upgrades";
 
     private final GeneratorTier tier;
     private final GeneratorEnergyStorage energy;
@@ -76,10 +81,21 @@ public class GeneratorBlockEntity extends BlockEntity {
     @Nullable
     private List<Item> activeOutputs;
 
+    /** Installed upgrades, indexed by {@link UpgradeType#ordinal()}; {@link ItemStack#EMPTY} where there is none. */
+    private final ItemStack[] upgrades = new ItemStack[UpgradeType.values().length];
+    /** Work steps per tick (speed upgrade). A step is what the generator does in one tick without upgrades. */
+    private int stepsPerTick = 1;
+    /** Multiplier of the items made per operation (efficiency upgrade). */
+    private int outputMultiplier = 1;
+    /** FE used by one work step (energy upgrade applied). */
+    private int energyPerStep;
+
     public GeneratorBlockEntity(BlockPos pos, BlockState state) {
         super(ModRegistry.GENERATOR_BLOCK_ENTITY.get(), pos, state);
         this.tier = state.getBlock() instanceof GeneratorBlock block ? block.getTier() : GeneratorTier.TIER_1;
         this.energy = new GeneratorEnergyStorage(tier.getCapacity(), this::markDirty);
+        Arrays.fill(upgrades, ItemStack.EMPTY);
+        applyUpgrades();
         createCapabilities();
     }
 
@@ -89,6 +105,65 @@ public class GeneratorBlockEntity extends BlockEntity {
 
     public int getEnergyStored() {
         return energy.getEnergyStored();
+    }
+
+    // ------------------------------------------------------------------ upgrades
+
+    public ItemStack getUpgrade(UpgradeType type) {
+        return upgrades[type.ordinal()];
+    }
+
+    /** Installs the upgrade ({@link ItemStack#EMPTY} removes it) and returns the previous one of that kind. */
+    public ItemStack setUpgrade(UpgradeType type, ItemStack upgrade) {
+        ItemStack previous = upgrades[type.ordinal()];
+        upgrades[type.ordinal()] = upgrade;
+        applyUpgrades();
+        markDirty();
+        return previous;
+    }
+
+    private int upgradeValue(UpgradeType type, int withoutUpgrade) {
+        return upgrades[type.ordinal()].getItem() instanceof UpgradeItem upgrade && upgrade.getType() == type
+                ? upgrade.getValue() : withoutUpgrade;
+    }
+
+    /** Recomputes the working parameters from the installed upgrades. */
+    private void applyUpgrades() {
+        stepsPerTick = upgradeValue(UpgradeType.SPEED, 1);
+        outputMultiplier = upgradeValue(UpgradeType.EFFICIENCY, 1);
+        int saved = upgradeValue(UpgradeType.ENERGY, 0);
+        // rounded up, never free
+        energyPerStep = (int) Math.max(1L, ((long) tier.getEnergyPerTick() * (100 - saved) + 99) / 100);
+    }
+
+    /** FE per tick at full speed with the installed upgrades. May exceed the range of an int. */
+    public long getEnergyPerTick() {
+        return (long) energyPerStep * stepsPerTick;
+    }
+
+    public boolean hasInstalledItems() {
+        if (!filter.isEmpty()) {
+            return true;
+        }
+        for (ItemStack upgrade : upgrades) {
+            if (!upgrade.isEmpty()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Takes out one installed item: the filter first, then the upgrades. Empty if there is nothing. */
+    public ItemStack takeInstalledItem() {
+        if (!filter.isEmpty()) {
+            return setFilter(ItemStack.EMPTY);
+        }
+        for (UpgradeType type : UpgradeType.values()) {
+            if (!upgrades[type.ordinal()].isEmpty()) {
+                return setUpgrade(type, ItemStack.EMPTY);
+            }
+        }
+        return ItemStack.EMPTY;
     }
 
     // ------------------------------------------------------------------ filter
@@ -150,34 +225,53 @@ public class GeneratorBlockEntity extends BlockEntity {
             outputIndex = 0;
         }
 
-        if (energy.getEnergyStored() < tier.getEnergyPerTick()) {
-            return; // waiting for power, progress is kept
-        }
-        ItemStack output = createOutput(outputs.get(outputIndex));
-        // Pause without burning energy while the buffer has no room for the next output.
-        if (!ItemHandlerHelper.insertItemStacked(inventory, output, true).isEmpty()) {
-            return;
-        }
-        energy.consume(tier.getEnergyPerTick());
+        // One step per tick, more with a speed upgrade. With too little power it simply does fewer steps.
+        boolean worked = false;
+        ItemStack output = null; // the next output, created once its room in the buffer has to be checked
+        for (int step = 0; step < stepsPerTick; step++) {
+            if (energy.getEnergyStored() < energyPerStep) {
+                break; // waiting for power, progress is kept
+            }
+            if (output == null) {
+                output = createOutput(outputs.get(outputIndex));
+                // Pause without burning energy while the buffer has no room for the next output.
+                if (!ItemHandlerHelper.insertItemStacked(inventory, output, true).isEmpty()) {
+                    break;
+                }
+            }
+            energy.consume(energyPerStep);
+            worked = true;
 
-        if (++progress >= tier.getCycleTicks()) {
-            progress = 0;
-            outputIndex = (outputIndex + 1) % outputs.size();
+            if (++progress >= tier.getCycleTicks()) {
+                progress = 0;
+                outputIndex = (outputIndex + 1) % outputs.size();
+                deliver(output, level, pos);
+                output = null;
+            }
+        }
+        if (worked) {
+            markDirty();
+        }
+    }
 
-            ItemStack remainder = eject(output, neighbourInventories(level, pos));
+    /** One operation's worth of the item. The count can exceed the item's maximum stack size. */
+    private ItemStack createOutput(Item item) {
+        ItemStack stack = new ItemStack(item);
+        int count = tier.producesFullStacks() ? stack.getMaxStackSize() : 1;
+        stack.setCount(count * outputMultiplier);
+        return stack;
+    }
+
+    /** Pushes the output into the neighbours in regular sized stacks; what does not fit goes to the buffer. */
+    private void deliver(ItemStack output, Level level, BlockPos pos) {
+        List<IItemHandler> targets = neighbourInventories(level, pos);
+        int maxStackSize = output.getMaxStackSize();
+        while (!output.isEmpty()) {
+            ItemStack remainder = eject(output.split(maxStackSize), targets);
             if (!remainder.isEmpty()) {
                 ItemHandlerHelper.insertItemStacked(inventory, remainder, false);
             }
         }
-        markDirty();
-    }
-
-    private ItemStack createOutput(Item item) {
-        ItemStack stack = new ItemStack(item);
-        if (tier.producesFullStacks()) {
-            stack.setCount(stack.getMaxStackSize());
-        }
-        return stack;
     }
 
     // ------------------------------------------------------------------ auto eject
@@ -241,20 +335,28 @@ public class GeneratorBlockEntity extends BlockEntity {
                 inventory.setStackInSlot(slot, ItemStack.EMPTY);
             }
         }
-        if (!filter.isEmpty()) {
-            Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), setFilter(ItemStack.EMPTY));
+        while (hasInstalledItems()) {
+            Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), takeInstalledItem());
         }
     }
 
     // ------------------------------------------------------------------ status
 
-    /** Action bar text shown on right click: tier, stored / max FE, FE per tick and the filter (if any). */
+    /** Action bar text shown on right click: tier, stored / max FE, FE per tick, upgrade effects and the filter. */
     public Component getStatusMessage() {
         MutableComponent status = Component.translatable("message.pi_generator.status",
                 Component.literal(String.valueOf(tier.getLevel())).withStyle(tier.getColor()),
                 Component.literal(GeneratorBlock.formatNumber(energy.getEnergyStored())).withStyle(ChatFormatting.GREEN),
                 Component.literal(GeneratorBlock.formatNumber(energy.getMaxEnergyStored())).withStyle(ChatFormatting.GREEN),
-                Component.literal(GeneratorBlock.formatNumber(tier.getEnergyPerTick())).withStyle(ChatFormatting.YELLOW));
+                Component.literal(GeneratorBlock.formatNumber(getEnergyPerTick())).withStyle(ChatFormatting.YELLOW));
+        if (stepsPerTick > 1) {
+            status.append(" | ").append(Component.translatable("message.pi_generator.status.speed", stepsPerTick)
+                    .withStyle(UpgradeType.SPEED.getColor()));
+        }
+        if (outputMultiplier > 1) {
+            status.append(" | ").append(Component.translatable("message.pi_generator.status.output", outputMultiplier)
+                    .withStyle(UpgradeType.EFFICIENCY.getColor()));
+        }
         if (!filter.isEmpty()) {
             status.append(" | ").append(Component.translatable("message.pi_generator.status.filter",
                     ResourceFilterItem.describe(filter)));
@@ -319,6 +421,15 @@ public class GeneratorBlockEntity extends BlockEntity {
         if (!filter.isEmpty()) {
             tag.put(TAG_FILTER, filter.save(new CompoundTag()));
         }
+        CompoundTag upgradesTag = new CompoundTag();
+        for (UpgradeType type : UpgradeType.values()) {
+            if (!upgrades[type.ordinal()].isEmpty()) {
+                upgradesTag.put(type.getName(), upgrades[type.ordinal()].save(new CompoundTag()));
+            }
+        }
+        if (!upgradesTag.isEmpty()) {
+            tag.put(TAG_UPGRADES, upgradesTag);
+        }
     }
 
     @Override
@@ -334,5 +445,11 @@ public class GeneratorBlockEntity extends BlockEntity {
         }
         filter = tag.contains(TAG_FILTER) ? ItemStack.of(tag.getCompound(TAG_FILTER)) : ItemStack.EMPTY;
         activeOutputs = null;
+        CompoundTag upgradesTag = tag.getCompound(TAG_UPGRADES);
+        for (UpgradeType type : UpgradeType.values()) {
+            upgrades[type.ordinal()] = upgradesTag.contains(type.getName())
+                    ? ItemStack.of(upgradesTag.getCompound(type.getName())) : ItemStack.EMPTY;
+        }
+        applyUpgrades();
     }
 }

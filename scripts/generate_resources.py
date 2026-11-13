@@ -8,6 +8,7 @@ Writes into src/main/resources:
   * assets/pi_generator/textures/block/generator_tier_N.png.mcmeta
   * assets/pi_generator/{blockstates,models/block,models/item}/generator_tier_N.json
   * assets/pi_generator/textures/item/resource_filter.png, models/item/resource_filter.json
+  * assets/pi_generator/{textures/item,models/item}/{speed,efficiency,energy}_upgrade_N.*
   * data/pi_generator/loot_tables/blocks/generator_tier_N.json
   * data/pi_generator/recipes/*.json
   * data/minecraft/tags/blocks/{mineable/pickaxe,needs_iron_tool}.json
@@ -195,6 +196,68 @@ def generate_filter_item():
                {"parent": "minecraft:item/generated", "textures": {"layer0": f"{MODID}:item/resource_filter"}})
 
 
+# Upgrades: a card with the symbol of the upgrade kind, a border in the tier colour and N of 4 tier pips.
+UPGRADE_TIERS = range(1, 5)
+UPGRADE_SYMBOLS = {
+    "speed": ((0xFF, 0x5A, 0x3C), ["#...#...",
+                                   ".#...#..",
+                                   "..#...#.",
+                                   "..#...#.",
+                                   ".#...#..",
+                                   "#...#..."]),
+    "efficiency": ((0x4C, 0xD0, 0x6A), ["...##...",
+                                        "...##...",
+                                        "########",
+                                        "########",
+                                        "...##...",
+                                        "...##..."]),
+    "energy": ((0xFF, 0xD2, 0x30), ["....##..",
+                                    "...##...",
+                                    "..#####.",
+                                    "....##..",
+                                    "...##...",
+                                    "..##...."]),
+}
+UPGRADE_BORDERS = {1: (0xB8, 0xBC, 0xC2), 2: (0xF0, 0xC0, 0x40), 3: (0x5C, 0xE0, 0xE8), 4: (0xB0, 0x4C, 0xF0)}
+UPGRADE_OUTLINE = (0x1E, 0x20, 0x26)
+UPGRADE_PANEL = (0x2C, 0x2F, 0x38)
+
+
+def upgrade_texture(kind, tier):
+    colour, symbol = UPGRADE_SYMBOLS[kind]
+    border = UPGRADE_BORDERS[tier]
+    rows = []
+    for y in range(SIZE):
+        row = []
+        for x in range(SIZE):
+            edge = min(x, y, SIZE - 1 - x, SIZE - 1 - y)
+            corner = (x in (1, 14)) and (y in (1, 14))
+            if edge == 0 or corner:
+                px = None                                           # transparent
+            elif edge == 1:
+                px = UPGRADE_OUTLINE
+            elif edge == 2:
+                px = mul(border, 1.0 if (x == 2 or y == 2) else 0.72)   # lit top/left, shaded bottom/right
+            else:
+                px = UPGRADE_PANEL
+                if 4 <= x <= 11 and 3 <= y <= 8 and symbol[y - 3][x - 4] == "#":
+                    px = mix(colour, WHITE, 0.35) if y <= 5 else colour
+                if y in (10, 11) and x in (4, 6, 8, 10):                # tier pips
+                    px = border if (x - 4) // 2 < tier else mul(UPGRADE_PANEL, 0.6)
+            row.append(px + (255,) if px else (0, 0, 0, 0))
+        rows.append(row)
+    return rows
+
+
+def generate_upgrade_items():
+    for kind in UPGRADE_SYMBOLS:
+        for tier in UPGRADE_TIERS:
+            name = f"{kind}_upgrade_{tier}"
+            write_png(os.path.join(ASSETS, "textures", "item", name + ".png"), SIZE, SIZE, upgrade_texture(kind, tier))
+            write_json(os.path.join(ASSETS, "models", "item", name + ".json"),
+                       {"parent": "minecraft:item/generated", "textures": {"layer0": f"{MODID}:item/{name}"}})
+
+
 # --------------------------------------------------------------------------- models / blockstates / loot
 
 def generate_models():
@@ -305,6 +368,31 @@ def generate_filter_recipes():
         "ingredients": [item(filter_id)],
         "result": item(filter_id),
     })
+
+
+# Upgrade recipes: tier 1 around a basic control circuit, every next tier around the previous upgrade.
+UPGRADE_KIND_ITEM = {"speed": "minecraft:redstone_block", "efficiency": "minecraft:lapis_block",
+                     "energy": "minecraft:glowstone"}
+UPGRADE_TIER_ITEM = {1: "minecraft:iron_ingot", 2: "mekanism:alloy_infused", 3: "mekanism:alloy_reinforced",
+                     4: "mekanism:alloy_atomic"}
+
+
+def generate_upgrade_recipes():
+    out = os.path.join(DATA, "recipes")
+    for kind, kind_item in UPGRADE_KIND_ITEM.items():
+        for tier in UPGRADE_TIERS:
+            name = f"{kind}_upgrade_{tier}"
+            centre = "mekanism:basic_control_circuit" if tier == 1 else f"{MODID}:{kind}_upgrade_{tier - 1}"
+            write_json(os.path.join(out, name + ".json"), {
+                "type": "minecraft:crafting_shaped",
+                "category": "misc",
+                "key": {"M": item(UPGRADE_TIER_ITEM[tier]), "K": item(kind_item), "C": item(centre)},
+                "pattern": ["MKM",
+                            "KCK",
+                            "MKM"],
+                "result": item(f"{MODID}:{name}"),
+                "show_notification": True,
+            })
 
 
 def generate_recipes():
@@ -422,8 +510,10 @@ def generate_recipes():
 if __name__ == "__main__":
     generate_textures()
     generate_filter_item()
+    generate_upgrade_items()
     generate_models()
     generate_loot_and_tags()
     generate_recipes()
     generate_filter_recipes()
+    generate_upgrade_recipes()
     print("resources written to", os.path.normpath(ROOT))

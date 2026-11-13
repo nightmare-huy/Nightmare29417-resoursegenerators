@@ -4,6 +4,7 @@ import com.projectinfinity.pigenerator.GeneratorTier;
 import com.projectinfinity.pigenerator.ModRegistry;
 import com.projectinfinity.pigenerator.blockentity.GeneratorBlockEntity;
 import com.projectinfinity.pigenerator.item.ResourceFilterItem;
+import com.projectinfinity.pigenerator.item.UpgradeItem;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -75,9 +76,9 @@ public class GeneratorBlock extends BaseEntityBlock {
     /**
      * Right click (there is intentionally no GUI):
      * <ul>
-     *   <li>holding a resource filter: install it, a filter that was already installed is handed back;</li>
-     *   <li>sneaking with an empty hand: take the installed filter out;</li>
-     *   <li>otherwise: show tier, charge and filter in the action bar.</li>
+     *   <li>holding a resource filter or an upgrade: install it, the one it replaces is handed back;</li>
+     *   <li>sneaking with an empty hand: take out the filter, then the upgrades, one per click;</li>
+     *   <li>otherwise: show tier, charge, upgrades and filter in the action bar.</li>
      * </ul>
      */
     @Override
@@ -86,20 +87,19 @@ public class GeneratorBlock extends BaseEntityBlock {
         if (!level.isClientSide && level.getBlockEntity(pos) instanceof GeneratorBlockEntity generator) {
             ItemStack held = player.getItemInHand(hand);
             if (held.getItem() instanceof ResourceFilterItem) {
-                ItemStack previous = generator.setFilter(held.split(1));
-                if (!previous.isEmpty()) {
-                    if (player.getItemInHand(hand).isEmpty()) {
-                        player.setItemInHand(hand, previous);
-                    } else {
-                        ItemHandlerHelper.giveItemToPlayer(player, previous);
-                    }
-                }
+                giveBack(player, hand, generator.setFilter(held.split(1)));
                 player.displayClientMessage(Component.translatable("message.pi_generator.filter.installed",
                         ResourceFilterItem.describe(generator.getFilter())).withStyle(ChatFormatting.GREEN), true);
-            } else if (player.isShiftKeyDown() && held.isEmpty() && generator.hasFilter()) {
-                player.setItemInHand(hand, generator.setFilter(ItemStack.EMPTY));
-                player.displayClientMessage(Component.translatable("message.pi_generator.filter.taken")
+            } else if (held.getItem() instanceof UpgradeItem upgrade) {
+                Component name = held.getHoverName();
+                giveBack(player, hand, generator.setUpgrade(upgrade.getType(), held.split(1)));
+                player.displayClientMessage(Component.translatable("message.pi_generator.installed", name)
+                        .withStyle(ChatFormatting.GREEN), true);
+            } else if (player.isShiftKeyDown() && held.isEmpty() && generator.hasInstalledItems()) {
+                ItemStack taken = generator.takeInstalledItem();
+                player.displayClientMessage(Component.translatable("message.pi_generator.taken", taken.getHoverName())
                         .withStyle(ChatFormatting.YELLOW), true);
+                player.setItemInHand(hand, taken);
             } else {
                 player.displayClientMessage(generator.getStatusMessage(), true);
             }
@@ -107,7 +107,19 @@ public class GeneratorBlock extends BaseEntityBlock {
         return InteractionResult.sidedSuccess(level.isClientSide);
     }
 
-    /** Drop the buffered items and the installed filter when the block is broken or replaced. */
+    /** Returns a replaced filter / upgrade to the player: into the (now empty) hand if possible. */
+    private static void giveBack(Player player, InteractionHand hand, ItemStack previous) {
+        if (previous.isEmpty()) {
+            return;
+        }
+        if (player.getItemInHand(hand).isEmpty()) {
+            player.setItemInHand(hand, previous);
+        } else {
+            ItemHandlerHelper.giveItemToPlayer(player, previous);
+        }
+    }
+
+    /** Drop the buffered items, the filter and the upgrades when the block is broken or replaced. */
     @SuppressWarnings("deprecation")
     @Override
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
