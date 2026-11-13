@@ -90,6 +90,16 @@ public enum GeneratorTier {
     }
 
     /** 1..8 */
+    /** Tier with the given level (1..8); tier 1 for anything else. */
+    public static GeneratorTier byLevel(int level) {
+        for (GeneratorTier tier : values()) {
+            if (tier.level == level) {
+                return tier;
+            }
+        }
+        return TIER_1;
+    }
+
     public int getLevel() {
         return level;
     }

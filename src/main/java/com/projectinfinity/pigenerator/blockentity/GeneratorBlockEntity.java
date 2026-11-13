@@ -4,16 +4,14 @@ import com.projectinfinity.pigenerator.GeneratorTier;
 import com.projectinfinity.pigenerator.ModRegistry;
 import com.projectinfinity.pigenerator.block.GeneratorBlock;
 import com.projectinfinity.pigenerator.energy.GeneratorEnergyStorage;
+import com.projectinfinity.pigenerator.item.InstalledItemsHandler;
 import com.projectinfinity.pigenerator.item.OutputOnlyItemHandler;
 import com.projectinfinity.pigenerator.item.ResourceFilterItem;
 import com.projectinfinity.pigenerator.item.UpgradeItem;
 import com.projectinfinity.pigenerator.upgrade.UpgradeType;
-import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.world.Containers;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -31,7 +29,6 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -44,6 +41,7 @@ import java.util.List;
  *       only what does not fit is kept in the buffer and retried periodically.</li>
  *   <li>An optional {@link ResourceFilterItem resource filter} limits which of the tier's outputs are made.</li>
  *   <li>Up to three {@link UpgradeItem upgrades}, one per {@link UpgradeType}: speed, efficiency, energy.</li>
+ *   <li>Everything is shown and edited in the generator screen, see {@code GeneratorMenu}.</li>
  * </ul>
  */
 public class GeneratorBlockEntity extends BlockEntity {
@@ -74,15 +72,21 @@ public class GeneratorBlockEntity extends BlockEntity {
     private int progress;
     private int outputIndex;
     private int flushTimer;
+    /** Set while the buffer has no room for the next output (shown in the screen). */
+    private boolean bufferFull;
 
-    /** Installed resource filter, or {@link ItemStack#EMPTY}. */
-    private ItemStack filter = ItemStack.EMPTY;
+    /** The installed resource filter (slot 0) and upgrades (one slot per {@link UpgradeType}). */
+    private final InstalledItemsHandler installed = new InstalledItemsHandler() {
+        @Override
+        protected void onContentsChanged(int slot) {
+            installedItemChanged(slot);
+            markDirty();
+        }
+    };
     /** The tier's outputs that pass the filter; {@code null} until computed or after the filter changed. */
     @Nullable
     private List<Item> activeOutputs;
 
-    /** Installed upgrades, indexed by {@link UpgradeType#ordinal()}; {@link ItemStack#EMPTY} where there is none. */
-    private final ItemStack[] upgrades = new ItemStack[UpgradeType.values().length];
     /** Work steps per tick (speed upgrade). A step is what the generator does in one tick without upgrades. */
     private int stepsPerTick = 1;
     /** Multiplier of the items made per operation (efficiency upgrade). */
@@ -94,7 +98,6 @@ public class GeneratorBlockEntity extends BlockEntity {
         super(ModRegistry.GENERATOR_BLOCK_ENTITY.get(), pos, state);
         this.tier = state.getBlock() instanceof GeneratorBlock block ? block.getTier() : GeneratorTier.TIER_1;
         this.energy = new GeneratorEnergyStorage(tier.getCapacity(), this::markDirty);
-        Arrays.fill(upgrades, ItemStack.EMPTY);
         applyUpgrades();
         createCapabilities();
     }
@@ -107,24 +110,85 @@ public class GeneratorBlockEntity extends BlockEntity {
         return energy.getEnergyStored();
     }
 
+    /** Ticks done of the current operation, 0..{@link GeneratorTier#getCycleTicks()}. */
+    public int getProgress() {
+        return progress;
+    }
+
+    /** The output buffer itself (the generator screen takes items out of it). */
+    public ItemStackHandler getBuffer() {
+        return inventory;
+    }
+
+    /** Filter and upgrade slots, see {@link InstalledItemsHandler}. */
+    public InstalledItemsHandler getInstalledItems() {
+        return installed;
+    }
+
+    /** What the generator is doing right now. */
+    public State getState() {
+        if (getActiveOutputs().isEmpty()) {
+            return State.NO_OUTPUTS;
+        }
+        if (energy.getEnergyStored() < energyPerStep) {
+            return State.NO_ENERGY;
+        }
+        return bufferFull ? State.BUFFER_FULL : State.WORKING;
+    }
+
+    public enum State {
+        WORKING, NO_ENERGY, BUFFER_FULL, NO_OUTPUTS;
+
+        public static State byId(int id) {
+            return id >= 0 && id < values().length ? values()[id] : WORKING;
+        }
+    }
+
+    /** Called when the contents of the buffer were changed in place (shift click in the screen). */
+    public void markChanged() {
+        markDirty();
+    }
+
+    private void installedItemChanged(int slot) {
+        if (slot == InstalledItemsHandler.FILTER_SLOT) {
+            activeOutputs = null;
+            outputIndex = 0;
+        } else {
+            applyUpgrades();
+        }
+    }
+
     // ------------------------------------------------------------------ upgrades
 
     public ItemStack getUpgrade(UpgradeType type) {
-        return upgrades[type.ordinal()];
+        return installed.getStackInSlot(InstalledItemsHandler.upgradeSlot(type));
     }
 
     /** Installs the upgrade ({@link ItemStack#EMPTY} removes it) and returns the previous one of that kind. */
     public ItemStack setUpgrade(UpgradeType type, ItemStack upgrade) {
-        ItemStack previous = upgrades[type.ordinal()];
-        upgrades[type.ordinal()] = upgrade;
-        applyUpgrades();
-        markDirty();
+        ItemStack previous = getUpgrade(type);
+        installed.setStackInSlot(InstalledItemsHandler.upgradeSlot(type), upgrade);
         return previous;
     }
 
     private int upgradeValue(UpgradeType type, int withoutUpgrade) {
-        return upgrades[type.ordinal()].getItem() instanceof UpgradeItem upgrade && upgrade.getType() == type
+        return getUpgrade(type).getItem() instanceof UpgradeItem upgrade && upgrade.getType() == type
                 ? upgrade.getValue() : withoutUpgrade;
+    }
+
+    /** Work steps per tick: 1, more with a speed upgrade. */
+    public int getStepsPerTick() {
+        return stepsPerTick;
+    }
+
+    /** Multiplier of the items made per operation: 1, more with an efficiency upgrade. */
+    public int getOutputMultiplier() {
+        return outputMultiplier;
+    }
+
+    /** FE used by one work step, the energy upgrade applied. */
+    public int getEnergyPerStep() {
+        return energyPerStep;
     }
 
     /** Recomputes the working parameters from the installed upgrades. */
@@ -142,11 +206,8 @@ public class GeneratorBlockEntity extends BlockEntity {
     }
 
     public boolean hasInstalledItems() {
-        if (!filter.isEmpty()) {
-            return true;
-        }
-        for (ItemStack upgrade : upgrades) {
-            if (!upgrade.isEmpty()) {
+        for (int slot = 0; slot < installed.getSlots(); slot++) {
+            if (!installed.getStackInSlot(slot).isEmpty()) {
                 return true;
             }
         }
@@ -155,12 +216,11 @@ public class GeneratorBlockEntity extends BlockEntity {
 
     /** Takes out one installed item: the filter first, then the upgrades. Empty if there is nothing. */
     public ItemStack takeInstalledItem() {
-        if (!filter.isEmpty()) {
-            return setFilter(ItemStack.EMPTY);
-        }
-        for (UpgradeType type : UpgradeType.values()) {
-            if (!upgrades[type.ordinal()].isEmpty()) {
-                return setUpgrade(type, ItemStack.EMPTY);
+        for (int slot = 0; slot < installed.getSlots(); slot++) {
+            ItemStack stack = installed.getStackInSlot(slot);
+            if (!stack.isEmpty()) {
+                installed.setStackInSlot(slot, ItemStack.EMPTY);
+                return stack;
             }
         }
         return ItemStack.EMPTY;
@@ -169,20 +229,17 @@ public class GeneratorBlockEntity extends BlockEntity {
     // ------------------------------------------------------------------ filter
 
     public boolean hasFilter() {
-        return !filter.isEmpty();
+        return !getFilter().isEmpty();
     }
 
     public ItemStack getFilter() {
-        return filter;
+        return installed.getStackInSlot(InstalledItemsHandler.FILTER_SLOT);
     }
 
     /** Installs the given filter ({@link ItemStack#EMPTY} removes it) and returns the previous one. */
     public ItemStack setFilter(ItemStack newFilter) {
-        ItemStack previous = filter;
-        filter = newFilter;
-        activeOutputs = null;
-        outputIndex = 0;
-        markDirty();
+        ItemStack previous = getFilter();
+        installed.setStackInSlot(InstalledItemsHandler.FILTER_SLOT, newFilter);
         return previous;
     }
 
@@ -191,6 +248,7 @@ public class GeneratorBlockEntity extends BlockEntity {
         List<Item> outputs = activeOutputs;
         if (outputs == null) {
             outputs = tier.getOutputs();
+            ItemStack filter = getFilter();
             if (!filter.isEmpty()) {
                 List<Item> allowed = new ArrayList<>(outputs.size());
                 for (Item item : outputs) {
@@ -219,6 +277,7 @@ public class GeneratorBlockEntity extends BlockEntity {
 
         List<Item> outputs = getActiveOutputs();
         if (outputs.isEmpty()) {
+            bufferFull = false;
             return; // nothing to make (filtered out or not present in this instance): idle, no energy is used
         }
         if (outputIndex >= outputs.size()) {
@@ -235,7 +294,8 @@ public class GeneratorBlockEntity extends BlockEntity {
             if (output == null) {
                 output = createOutput(outputs.get(outputIndex));
                 // Pause without burning energy while the buffer has no room for the next output.
-                if (!ItemHandlerHelper.insertItemStacked(inventory, output, true).isEmpty()) {
+                bufferFull = !ItemHandlerHelper.insertItemStacked(inventory, output, true).isEmpty();
+                if (bufferFull) {
                     break;
                 }
             }
@@ -340,34 +400,6 @@ public class GeneratorBlockEntity extends BlockEntity {
         }
     }
 
-    // ------------------------------------------------------------------ status
-
-    /** Action bar text shown on right click: tier, stored / max FE, FE per tick, upgrade effects and the filter. */
-    public Component getStatusMessage() {
-        MutableComponent status = Component.translatable("message.pi_generator.status",
-                Component.literal(String.valueOf(tier.getLevel())).withStyle(tier.getColor()),
-                Component.literal(GeneratorBlock.formatNumber(energy.getEnergyStored())).withStyle(ChatFormatting.GREEN),
-                Component.literal(GeneratorBlock.formatNumber(energy.getMaxEnergyStored())).withStyle(ChatFormatting.GREEN),
-                Component.literal(GeneratorBlock.formatNumber(getEnergyPerTick())).withStyle(ChatFormatting.YELLOW));
-        if (stepsPerTick > 1) {
-            status.append(" | ").append(Component.translatable("message.pi_generator.status.speed", stepsPerTick)
-                    .withStyle(UpgradeType.SPEED.getColor()));
-        }
-        if (outputMultiplier > 1) {
-            status.append(" | ").append(Component.translatable("message.pi_generator.status.output", outputMultiplier)
-                    .withStyle(UpgradeType.EFFICIENCY.getColor()));
-        }
-        if (!filter.isEmpty()) {
-            status.append(" | ").append(Component.translatable("message.pi_generator.status.filter",
-                    ResourceFilterItem.describe(filter)));
-            if (getActiveOutputs().isEmpty()) {
-                status.append(" ").append(Component.translatable("message.pi_generator.status.nothing")
-                        .withStyle(ChatFormatting.RED));
-            }
-        }
-        return status;
-    }
-
     // ------------------------------------------------------------------ capabilities
 
     private void createCapabilities() {
@@ -418,13 +450,13 @@ public class GeneratorBlockEntity extends BlockEntity {
         tag.putInt(TAG_PROGRESS, progress);
         tag.putInt(TAG_OUTPUT_INDEX, outputIndex);
         tag.put(TAG_INVENTORY, inventory.serializeNBT());
-        if (!filter.isEmpty()) {
-            tag.put(TAG_FILTER, filter.save(new CompoundTag()));
+        if (hasFilter()) {
+            tag.put(TAG_FILTER, getFilter().save(new CompoundTag()));
         }
         CompoundTag upgradesTag = new CompoundTag();
         for (UpgradeType type : UpgradeType.values()) {
-            if (!upgrades[type.ordinal()].isEmpty()) {
-                upgradesTag.put(type.getName(), upgrades[type.ordinal()].save(new CompoundTag()));
+            if (!getUpgrade(type).isEmpty()) {
+                upgradesTag.put(type.getName(), getUpgrade(type).save(new CompoundTag()));
             }
         }
         if (!upgradesTag.isEmpty()) {
@@ -443,13 +475,16 @@ public class GeneratorBlockEntity extends BlockEntity {
             inventoryTag.putInt("Size", SLOTS); // the buffer size is fixed, ignore whatever was saved
             inventory.deserializeNBT(inventoryTag);
         }
-        filter = tag.contains(TAG_FILTER) ? ItemStack.of(tag.getCompound(TAG_FILTER)) : ItemStack.EMPTY;
-        activeOutputs = null;
+        // The saved layout ({Filter: {...}, Upgrades: {speed: {...}, ...}}) is older than the slots: keep it.
+        // Written straight into the handler's list so that loading does not mark the chunk as changed.
+        installed.load(InstalledItemsHandler.FILTER_SLOT,
+                tag.contains(TAG_FILTER) ? ItemStack.of(tag.getCompound(TAG_FILTER)) : ItemStack.EMPTY);
         CompoundTag upgradesTag = tag.getCompound(TAG_UPGRADES);
         for (UpgradeType type : UpgradeType.values()) {
-            upgrades[type.ordinal()] = upgradesTag.contains(type.getName())
-                    ? ItemStack.of(upgradesTag.getCompound(type.getName())) : ItemStack.EMPTY;
+            installed.load(InstalledItemsHandler.upgradeSlot(type), upgradesTag.contains(type.getName())
+                    ? ItemStack.of(upgradesTag.getCompound(type.getName())) : ItemStack.EMPTY);
         }
+        activeOutputs = null;
         applyUpgrades();
     }
 }

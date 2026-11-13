@@ -9,6 +9,7 @@ Writes into src/main/resources:
   * assets/pi_generator/{blockstates,models/block,models/item}/generator_tier_N.json
   * assets/pi_generator/textures/item/resource_filter.png, models/item/resource_filter.json
   * assets/pi_generator/{textures/item,models/item}/{speed,efficiency,energy}_upgrade_N.*
+  * assets/pi_generator/textures/gui/{generator,resource_filter}.png   (screen backgrounds, 256x256 sheets)
   * data/pi_generator/loot_tables/blocks/generator_tier_N.json
   * data/pi_generator/recipes/*.json
   * data/minecraft/tags/blocks/{mineable/pickaxe,needs_iron_tool}.json
@@ -256,6 +257,149 @@ def generate_upgrade_items():
             write_png(os.path.join(ASSETS, "textures", "item", name + ".png"), SIZE, SIZE, upgrade_texture(kind, tier))
             write_json(os.path.join(ASSETS, "models", "item", name + ".json"),
                        {"parent": "minecraft:item/generated", "textures": {"layer0": f"{MODID}:item/{name}"}})
+
+
+# --------------------------------------------------------------------------- screens (GUI backgrounds)
+
+# The two screens use 256x256 sheets in the vanilla container style. The numbers below must match the slot
+# positions in GeneratorMenu / FilterMenu and the bar positions in GeneratorScreen.
+GUI_SHEET = 256
+GUI_WIDTH = 176
+GUI_FACE = (0xC6, 0xC6, 0xC6)
+GUI_LIGHT = (0xFF, 0xFF, 0xFF)
+GUI_SHADOW = (0x55, 0x55, 0x55)
+GUI_BLACK = (0x00, 0x00, 0x00)
+GUI_SLOT = (0x8B, 0x8B, 0x8B)
+GUI_SLOT_DARK = (0x37, 0x37, 0x37)
+GUI_HINT = (0x70, 0x70, 0x70)
+GUI_BAR_EMPTY = (0x2A, 0x10, 0x10)
+GUI_PROGRESS_EMPTY = (0x5A, 0x5A, 0x5A)
+
+GENERATOR_GUI_HEIGHT = 222
+GENERATOR_ENERGY_BAR = (9, 18, 14, 48)       # x, y, width, height of the inside of the energy bar
+GENERATOR_PROGRESS_BAR = (31, 54, 60, 10)
+GENERATOR_INSTALLED_SLOTS = (98, 50)         # filter, speed, efficiency, energy
+GENERATOR_BUFFER_Y = 72
+GENERATOR_INVENTORY_Y = 140
+GENERATOR_ENERGY_FILL_UV = (176, 0)          # sprites drawn over the empty bars
+GENERATOR_PROGRESS_FILL_UV = (176, 48)
+
+FILTER_GUI_HEIGHT = 174
+FILTER_GHOST_Y = 18
+FILTER_INVENTORY_Y = 92
+FILTER_GHOST_SLOT = (0x7C, 0x84, 0x96)       # ghost slots are tinted so that they do not look like storage
+
+
+class Sheet:
+    def __init__(self):
+        self.px = [[(0, 0, 0, 0)] * GUI_SHEET for _ in range(GUI_SHEET)]
+
+    def set(self, x, y, colour):
+        self.px[y][x] = tuple(colour) + (255,)
+
+    def rect(self, x, y, w, h, colour):
+        for yy in range(y, y + h):
+            for xx in range(x, x + w):
+                self.set(xx, yy, colour)
+
+    def panel(self, w, h):
+        """Vanilla style window: black outline with cut corners, light top/left, shaded bottom/right."""
+        self.rect(0, 0, w, h, GUI_FACE)
+        self.rect(1, 1, w - 3, 2, GUI_LIGHT)
+        self.rect(1, 1, 2, h - 3, GUI_LIGHT)
+        self.rect(3, h - 3, w - 4, 2, GUI_SHADOW)
+        self.rect(w - 3, 3, 2, h - 4, GUI_SHADOW)
+        self.set(3, 3, GUI_LIGHT)
+        self.set(w - 4, h - 4, GUI_SHADOW)
+        self.rect(2, 0, w - 4, 1, GUI_BLACK)
+        self.rect(2, h - 1, w - 4, 1, GUI_BLACK)
+        self.rect(0, 2, 1, h - 4, GUI_BLACK)
+        self.rect(w - 1, 2, 1, h - 4, GUI_BLACK)
+        for cx, cy in ((1, 1), (w - 2, 1), (1, h - 2), (w - 2, h - 2)):
+            self.set(cx, cy, GUI_BLACK)
+        for cx, cy in ((0, 0), (1, 0), (0, 1), (w - 1, 0), (w - 2, 0), (w - 1, 1),
+                       (0, h - 1), (1, h - 1), (0, h - 2), (w - 1, h - 1), (w - 2, h - 1), (w - 1, h - 2)):
+            self.px[cy][cx] = (0, 0, 0, 0)
+        self.set(w - 3, 2, GUI_FACE)
+        self.set(2, h - 3, GUI_FACE)
+
+    def inset(self, x, y, w, h, inside):
+        """Sunken frame around the inner area x, y, w, h (the frame itself lies one pixel outside of it)."""
+        self.rect(x - 1, y - 1, w + 1, 1, GUI_SLOT_DARK)
+        self.rect(x - 1, y - 1, 1, h + 1, GUI_SLOT_DARK)
+        self.rect(x, y + h, w + 1, 1, GUI_LIGHT)
+        self.rect(x + w, y, 1, h + 1, GUI_LIGHT)
+        self.set(x + w, y - 1, GUI_SLOT)
+        self.set(x - 1, y + h, GUI_SLOT)
+        self.rect(x, y, w, h, inside)
+
+    def slot(self, x, y, inside=GUI_SLOT):
+        """x, y: where the item is drawn (as in Slot.x / Slot.y)."""
+        self.inset(x, y, 16, 16, inside)
+
+    def slots(self, x, y, columns, rows, inside=GUI_SLOT):
+        for row in range(rows):
+            for column in range(columns):
+                self.slot(x + column * 18, y + row * 18, inside)
+
+    def inventory(self, y):
+        self.slots(8, y, 9, 3)
+        self.slots(8, y + 58, 9, 1)
+
+    def mask(self, x, y, rows, colour, skip="."):
+        for dy, row in enumerate(rows):
+            for dx, c in enumerate(row):
+                if c not in skip:
+                    self.set(x + dx, y + dy, colour)
+
+    def save(self, name):
+        write_png(os.path.join(ASSETS, "textures", "gui", name + ".png"), GUI_SHEET, GUI_SHEET, self.px)
+
+
+def generate_gui():
+    # --- generator
+    sheet = Sheet()
+    sheet.panel(GUI_WIDTH, GENERATOR_GUI_HEIGHT)
+    x, y, w, h = GENERATOR_ENERGY_BAR
+    sheet.inset(x, y, w, h, GUI_BAR_EMPTY)
+    for line in range(y + 3, y + h, 4):                       # segment marks
+        sheet.rect(x, line, w, 1, mul(GUI_BAR_EMPTY, 0.6))
+    x, y, w, h = GENERATOR_PROGRESS_BAR
+    sheet.inset(x, y, w, h, GUI_PROGRESS_EMPTY)
+
+    x, y = GENERATOR_INSTALLED_SLOTS
+    sheet.slots(x, y, 4, 1)
+    sheet.mask(x, y, FILTER_ART, GUI_HINT, skip=".lmdgpP")    # what belongs into each slot: outlines only
+    for index, kind in enumerate(UPGRADE_SYMBOLS):
+        sheet.mask(x + 18 * (index + 1) + 4, y + 5, UPGRADE_SYMBOLS[kind][1], GUI_HINT)
+    sheet.slots(8, GENERATOR_BUFFER_Y, 9, 3)
+    sheet.inventory(GENERATOR_INVENTORY_Y)
+
+    # fill of the energy bar: red at the bottom to yellow at the top, with the same segment marks
+    u, v = GENERATOR_ENERGY_FILL_UV
+    _, _, w, h = GENERATOR_ENERGY_BAR
+    for dy in range(h):
+        colour = mix((0xE8, 0x2A, 0x1E), (0xFF, 0xC8, 0x30), 1.0 - dy / (h - 1))
+        for dx in range(w):
+            shade = 1.15 if dx in (1, 2) else 0.8 if dx >= w - 2 else 1.0
+            if dy % 4 == 3:
+                shade *= 0.7
+            sheet.set(u + dx, v + dy, mul(colour, shade))
+    # fill of the progress bar
+    u, v = GENERATOR_PROGRESS_FILL_UV
+    _, _, w, h = GENERATOR_PROGRESS_BAR
+    for dy in range(h):
+        shade = 1.25 if dy in (1, 2) else 0.75 if dy >= h - 2 else 1.0
+        for dx in range(w):
+            sheet.set(u + dx, v + dy, mul((0x4C, 0xC8, 0x5E), shade))
+    sheet.save("generator")
+
+    # --- resource filter
+    sheet = Sheet()
+    sheet.panel(GUI_WIDTH, FILTER_GUI_HEIGHT)
+    sheet.slots(8, FILTER_GHOST_Y, 9, 2, FILTER_GHOST_SLOT)
+    sheet.inventory(FILTER_INVENTORY_Y)
+    sheet.save("resource_filter")
 
 
 # --------------------------------------------------------------------------- models / blockstates / loot
@@ -511,6 +655,7 @@ if __name__ == "__main__":
     generate_textures()
     generate_filter_item()
     generate_upgrade_items()
+    generate_gui()
     generate_models()
     generate_loot_and_tags()
     generate_recipes()

@@ -4,15 +4,19 @@ import com.projectinfinity.pigenerator.block.GeneratorBlock;
 import com.projectinfinity.pigenerator.blockentity.GeneratorBlockEntity;
 import com.projectinfinity.pigenerator.item.ResourceFilterItem;
 import com.projectinfinity.pigenerator.item.UpgradeItem;
+import com.projectinfinity.pigenerator.menu.FilterMenu;
+import com.projectinfinity.pigenerator.menu.GeneratorMenu;
 import com.projectinfinity.pigenerator.upgrade.UpgradeType;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraftforge.common.extensions.IForgeMenuType;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -24,7 +28,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
-/** All registry entries of the mod: 8 blocks and their items, the filter, 12 upgrades, the block entity type and the creative tab. */
+/** All registry entries of the mod: 8 blocks and their items, the filter, 12 upgrades, the block entity type, the two menus and the creative tab. */
 public final class ModRegistry {
     public static final DeferredRegister<Block> BLOCKS =
             DeferredRegister.create(ForgeRegistries.BLOCKS, PiGenerator.MODID);
@@ -32,6 +36,8 @@ public final class ModRegistry {
             DeferredRegister.create(ForgeRegistries.ITEMS, PiGenerator.MODID);
     public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITY_TYPES =
             DeferredRegister.create(ForgeRegistries.BLOCK_ENTITY_TYPES, PiGenerator.MODID);
+    public static final DeferredRegister<MenuType<?>> MENU_TYPES =
+            DeferredRegister.create(ForgeRegistries.MENU_TYPES, PiGenerator.MODID);
     public static final DeferredRegister<CreativeModeTab> CREATIVE_TABS =
             DeferredRegister.create(Registries.CREATIVE_MODE_TAB, PiGenerator.MODID);
 
@@ -77,6 +83,14 @@ public final class ModRegistry {
                     GENERATORS.values().stream().map(RegistryObject::get).toArray(Block[]::new)
             ).build(null));
 
+    /** Screen of a generator; the extra data is the tier level. */
+    public static final RegistryObject<MenuType<GeneratorMenu>> GENERATOR_MENU =
+            MENU_TYPES.register("generator", () -> IForgeMenuType.create(GeneratorMenu::new));
+
+    /** Screen of the resource filter in the main hand; the extra data is its hotbar slot. */
+    public static final RegistryObject<MenuType<FilterMenu>> FILTER_MENU =
+            MENU_TYPES.register("resource_filter", () -> IForgeMenuType.create(FilterMenu::new));
+
     public static final RegistryObject<CreativeModeTab> CREATIVE_TAB = CREATIVE_TABS.register("main",
             () -> CreativeModeTab.builder()
                     .title(Component.translatable("itemGroup.pi_generator"))
@@ -92,6 +106,7 @@ public final class ModRegistry {
         BLOCKS.register(modBus);
         ITEMS.register(modBus);
         BLOCK_ENTITY_TYPES.register(modBus);
+        MENU_TYPES.register(modBus);
         CREATIVE_TABS.register(modBus);
     }
 

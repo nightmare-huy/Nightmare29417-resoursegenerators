@@ -5,11 +5,14 @@ import com.projectinfinity.pigenerator.ModRegistry;
 import com.projectinfinity.pigenerator.blockentity.GeneratorBlockEntity;
 import com.projectinfinity.pigenerator.item.ResourceFilterItem;
 import com.projectinfinity.pigenerator.item.UpgradeItem;
+import com.projectinfinity.pigenerator.menu.GeneratorMenu;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
@@ -26,6 +29,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraftforge.items.ItemHandlerHelper;
+import net.minecraftforge.network.NetworkHooks;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -74,11 +78,11 @@ public class GeneratorBlock extends BaseEntityBlock {
     }
 
     /**
-     * Right click (there is intentionally no GUI):
+     * Right click:
      * <ul>
      *   <li>holding a resource filter or an upgrade: install it, the one it replaces is handed back;</li>
      *   <li>sneaking with an empty hand: take out the filter, then the upgrades, one per click;</li>
-     *   <li>otherwise: show tier, charge, upgrades and filter in the action bar.</li>
+     *   <li>otherwise: open the generator screen ({@link GeneratorMenu}).</li>
      * </ul>
      */
     @Override
@@ -100,8 +104,10 @@ public class GeneratorBlock extends BaseEntityBlock {
                 player.displayClientMessage(Component.translatable("message.pi_generator.taken", taken.getHoverName())
                         .withStyle(ChatFormatting.YELLOW), true);
                 player.setItemInHand(hand, taken);
-            } else {
-                player.displayClientMessage(generator.getStatusMessage(), true);
+            } else if (player instanceof ServerPlayer serverPlayer) {
+                NetworkHooks.openScreen(serverPlayer,
+                        new SimpleMenuProvider((id, inventory, p) -> new GeneratorMenu(id, inventory, generator), getName()),
+                        buffer -> buffer.writeVarInt(tier.getLevel()));
             }
         }
         return InteractionResult.sidedSuccess(level.isClientSide);
