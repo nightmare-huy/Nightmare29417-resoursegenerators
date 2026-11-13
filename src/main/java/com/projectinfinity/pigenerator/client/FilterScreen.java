@@ -1,7 +1,6 @@
 package com.projectinfinity.pigenerator.client;
 
 import com.projectinfinity.pigenerator.PiGenerator;
-import com.projectinfinity.pigenerator.item.ResourceFilterItem;
 import com.projectinfinity.pigenerator.menu.FilterMenu;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
@@ -17,10 +16,17 @@ import java.util.List;
 /**
  * Resource filter screen: 18 ghost slots with the listed items and a button that switches between
  * "everything except the listed" and "only the listed".
+ *
+ * <p>The button is drawn from the screen's own sheet, see {@code filter_button()} in
+ * {@code scripts/generate_resources.py}.</p>
  */
 public class FilterScreen extends AbstractContainerScreen<FilterMenu> {
     private static final ResourceLocation TEXTURE = new ResourceLocation(PiGenerator.MODID, "textures/gui/resource_filter.png");
     private static final int BUTTON_X = 8, BUTTON_Y = 58, BUTTON_WIDTH = 160, BUTTON_HEIGHT = 20;
+    /** Button sprites below the window: except, except (hovered), only, only (hovered). */
+    private static final int BUTTON_V = 174;
+    /** The left part of the button holds the mode icon, the label is centred in the rest. */
+    private static final int BUTTON_ICON_WIDTH = 20;
     private static final int TEXT_COLOUR = 0x404040;
 
     private Button modeButton;
@@ -37,8 +43,7 @@ public class FilterScreen extends AbstractContainerScreen<FilterMenu> {
     @Override
     protected void init() {
         super.init();
-        modeButton = addRenderableWidget(Button.builder(Component.empty(), button -> toggleMode())
-                .bounds(leftPos + BUTTON_X, topPos + BUTTON_Y, BUTTON_WIDTH, BUTTON_HEIGHT).build());
+        modeButton = addRenderableWidget(new ModeButton(leftPos + BUTTON_X, topPos + BUTTON_Y));
         shownMode = null;
         updateButton();
     }
@@ -54,9 +59,8 @@ public class FilterScreen extends AbstractContainerScreen<FilterMenu> {
         boolean whitelist = menu.isWhitelist();
         if (shownMode == null || shownMode != whitelist) {
             shownMode = whitelist;
-            // plain white on the button: the mode colours are for chat and tooltips
-            modeButton.setMessage(Component.translatable("tooltip.pi_generator.filter.mode",
-                    ResourceFilterItem.modeName(whitelist).withStyle(ChatFormatting.WHITE)));
+            modeButton.setMessage(Component.translatable(
+                    whitelist ? "gui.pi_generator.filter.only" : "gui.pi_generator.filter.except"));
             modeButton.setTooltip(Tooltip.create(Component.translatable(
                     whitelist ? "gui.pi_generator.filter.only_hint" : "gui.pi_generator.filter.except_hint")));
         }
@@ -97,6 +101,21 @@ public class FilterScreen extends AbstractContainerScreen<FilterMenu> {
                     Component.translatable("gui.pi_generator.filter.slot_shift").withStyle(ChatFormatting.GRAY),
                     Component.translatable("gui.pi_generator.filter.slot_remove").withStyle(ChatFormatting.GRAY)),
                     mouseX, mouseY);
+        }
+    }
+
+    /** The mode button: its plate and icon come from the sheet and follow the mode of the filter. */
+    private class ModeButton extends Button {
+        ModeButton(int x, int y) {
+            super(x, y, BUTTON_WIDTH, BUTTON_HEIGHT, Component.empty(), button -> toggleMode(), DEFAULT_NARRATION);
+        }
+
+        @Override
+        protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+            int state = (menu.isWhitelist() ? 2 : 0) + (isHoveredOrFocused() ? 1 : 0);
+            graphics.blit(TEXTURE, getX(), getY(), 0, BUTTON_V + state * BUTTON_HEIGHT, width, height);
+            graphics.drawCenteredString(font, getMessage(), getX() + (BUTTON_ICON_WIDTH + width) / 2,
+                    getY() + (height - 8) / 2, 0xFFFFFF);
         }
     }
 }

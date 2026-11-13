@@ -4,12 +4,13 @@
     python3 scripts/generate_resources.py
 
 Writes into src/main/resources:
-  * assets/pi_generator/textures/block/generator_tier_N.png   (16x16 animated strips, 16 frames each)
-  * assets/pi_generator/textures/block/generator_tier_N.png.mcmeta
+  * assets/pi_generator/textures/block/generator_tier_N{,_top,_bottom}.png   (16x16 animated strips, 16 frames each)
+  * assets/pi_generator/textures/block/generator_tier_N{,_top,_bottom}.png.mcmeta
   * assets/pi_generator/{blockstates,models/block,models/item}/generator_tier_N.json
-  * assets/pi_generator/textures/item/resource_filter.png, models/item/resource_filter.json
+  * assets/pi_generator/textures/item/resource_filter.png (+ .mcmeta, animated), models/item/resource_filter.json
   * assets/pi_generator/{textures/item,models/item}/{speed,efficiency,energy}_upgrade_N.*
-  * assets/pi_generator/textures/gui/{generator,resource_filter}.png   (screen backgrounds, 256x256 sheets)
+  * assets/pi_generator/textures/gui/{generator_tier_N,resource_filter}.png   (screen backgrounds, 256x256 sheets)
+  * pi_generator_logo.png   (mods list logo)
   * data/pi_generator/loot_tables/blocks/generator_tier_N.json
   * data/pi_generator/recipes/*.json
   * data/minecraft/tags/blocks/{mineable/pickaxe,needs_iron_tool}.json
@@ -147,18 +148,113 @@ def texture_frame(tier, frame=0):
     return rows
 
 
+def casing_colour(tier):
+    return mix(STEEL, ACCENTS[tier], 0.30 if tier > 1 else 0.0)
+
+
+def casing_pixel(tier, x, y, noise):
+    """Frame, bevel, plate and rivets shared by all faces. noise: one value per pixel, the same on every frame."""
+    casing = casing_colour(tier)
+    edge = min(x, y, SIZE - 1 - x, SIZE - 1 - y)
+    if edge == 0:                                       # outer frame
+        px = mul(casing, 0.42)
+    elif edge == 1:                                     # bevel: light top/left, dark bottom/right
+        px = mul(casing, 1.25 if (x == 1 or y == 1) and x != 14 and y != 14 else 0.68)
+    else:
+        px = mul(casing, 0.92 + noise)                  # plate
+    if (x in (2, 13)) and (y in (2, 13)):               # rivets
+        px = mul(casing, 1.5)
+    return px
+
+
+def shimmer(phase, saturation=0.62):
+    """Tier 8: purple / magenta / blue / cyan."""
+    hue = 0.62 + 0.30 * (0.5 + 0.5 * math.sin(phase * 2 * math.pi))
+    r, g, b = colorsys.hsv_to_rgb(hue % 1.0, saturation, 1.0)
+    return (clamp(r * 255), clamp(g * 255), clamp(b * 255))
+
+
+# The 20 cells around the 6x6 middle of a face, clockwise from the top left one: the path of the top face's light.
+RING = ([(x, 5) for x in range(5, 11)] + [(10, y) for y in range(6, 11)]
+        + [(x, 10) for x in range(9, 4, -1)] + [(5, y) for y in range(9, 5, -1)])
+
+
+def top_frame(tier, frame=0):
+    """Top face: an emitter. Two lights chase each other around a ring, the lens in the middle pulses."""
+    accent = ACCENTS[tier]
+    casing = casing_colour(tier)
+    noise = random.Random(2000 + tier)
+    rows = []
+    for y in range(SIZE):
+        row = []
+        for x in range(SIZE):
+            px = casing_pixel(tier, x, y, noise.uniform(-0.05, 0.05))
+            # cooling slits on the four sides of the emitter
+            if (y in (3, 12) and 5 <= x <= 10 and x % 2 == 1) or (x in (3, 12) and 5 <= y <= 10 and y % 2 == 1):
+                px = mul(casing, 0.45)
+            if 4 <= x <= 11 and 4 <= y <= 11:
+                px = mul(casing, 0.36)                                      # socket
+                dist = max(abs(x - 7.5), abs(y - 7.5))
+                if (x, y) in RING:
+                    position = RING.index((x, y)) / len(RING)
+                    # two lights, half a turn apart, each with a fading tail
+                    tail = ((frame / FRAMES - position) * 2) % 1.0
+                    glow = max(0.0, 1.0 - tail * 1.6)
+                    colour = shimmer(position + frame / FRAMES) if tier == 8 else accent
+                    px = mix(mul(colour, 0.38), mix(colour, WHITE, 0.35), glow)
+                elif dist == 1.5:                                           # dark gap between ring and lens
+                    px = mul(casing, 0.26)
+                elif dist == 0.5:                                           # lens
+                    wave = 0.5 + 0.5 * math.cos(2 * math.pi * frame / FRAMES)
+                    colour = shimmer(frame / FRAMES + (x + y) / 8.0, 0.45) if tier == 8 else accent
+                    px = mix(mul(colour, 0.80), WHITE, 0.25 + 0.45 * wave)
+            row.append(px)
+        rows.append(row)
+    return rows
+
+
+def bottom_frame(tier, frame=0):
+    """Bottom face: a base plate with four feet, a service hatch and one slowly blinking status light."""
+    accent = ACCENTS[tier]
+    casing = casing_colour(tier)
+    noise = random.Random(3000 + tier)
+    rows = []
+    for y in range(SIZE):
+        row = []
+        for x in range(SIZE):
+            px = casing_pixel(tier, x, y, noise.uniform(-0.05, 0.05))
+            if (x in (3, 4, 11, 12)) and (y in (3, 4, 11, 12)):             # feet
+                px = mul(casing, 0.30 if (x in (4, 12) or y in (4, 12)) else 0.40)
+            if 5 <= x <= 10 and 5 <= y <= 10:                               # hatch
+                hatch_edge = min(x - 5, y - 5, 10 - x, 10 - y)
+                px = mul(casing, 0.50 if hatch_edge == 0 else 0.78)
+                if hatch_edge >= 1 and y in (7, 9) and x < 9:               # label lines
+                    px = mul(casing, 0.58)
+                if (x, y) == (9, 6):                                        # status light
+                    blink = 0.5 + 0.5 * math.cos(2 * math.pi * frame / FRAMES)
+                    colour = shimmer(frame / FRAMES) if tier == 8 else accent
+                    px = mix(mul(colour, 0.45), mix(colour, WHITE, 0.30), blink)
+            row.append(px)
+        rows.append(row)
+    return rows
+
+
+# Faces of a generator: texture name suffix -> function drawing one frame.
+BLOCK_FACES = {"": texture_frame, "_top": top_frame, "_bottom": bottom_frame}
+
+
 def generate_textures():
     tex_dir = os.path.join(ASSETS, "textures", "block")
     for tier in TIERS:
-        path = os.path.join(tex_dir, f"generator_tier_{tier}.png")
-        rows = []
-        for frame in range(FRAMES):
-            rows.extend(texture_frame(tier, frame))
-        write_png(path, SIZE, SIZE * FRAMES, rows)
-        write_json(path + ".mcmeta", {"animation": {"frametime": FRAMETIME[tier], "interpolate": True}})
+        for suffix, draw in BLOCK_FACES.items():
+            path = os.path.join(tex_dir, f"generator_tier_{tier}{suffix}.png")
+            rows = []
+            for frame in range(FRAMES):
+                rows.extend(draw(tier, frame))
+            write_png(path, SIZE, SIZE * FRAMES, rows)
+            write_json(path + ".mcmeta", {"animation": {"frametime": FRAMETIME[tier], "interpolate": True}})
 
 
-# Resource filter item: a funnel with a mesh on top and a purple core.
 FILTER_ART = [
     "................",
     ".oooooooooooooo.",
@@ -189,10 +285,38 @@ FILTER_PALETTE = {
 }
 
 
+ITEM_FRAMES = 8      # animation frames of the item textures
+ITEM_FRAMETIME = 3   # ticks per frame
+
+
+def write_item_texture(name, draw):
+    """draw(frame) -> 16 rows of RGBA pixels. Writes the frames as a vertical strip plus its .mcmeta."""
+    path = os.path.join(ASSETS, "textures", "item", name + ".png")
+    rows = []
+    for frame in range(ITEM_FRAMES):
+        rows.extend(draw(frame))
+    write_png(path, SIZE, SIZE * ITEM_FRAMES, rows)
+    write_json(path + ".mcmeta", {"animation": {"frametime": ITEM_FRAMETIME, "interpolate": True}})
+
+
+def filter_texture(frame=0):
+    """The core in the funnel glows: a pulse runs down through it."""
+    rows = []
+    for y, line in enumerate(FILTER_ART):
+        row = []
+        for c in line:
+            px = FILTER_PALETTE[c]
+            if c in "pP":
+                wave = 0.5 + 0.5 * math.cos(2 * math.pi * (frame / ITEM_FRAMES - (y - 7) / 4.0))
+                px = mix(mul(px[:3], 0.80), WHITE, 0.10 + 0.40 * wave) + (255,)
+            row.append(px)
+        rows.append(row)
+    return rows
+
+
 def generate_filter_item():
     assert len(FILTER_ART) == SIZE and all(len(row) == SIZE for row in FILTER_ART), FILTER_ART
-    write_png(os.path.join(ASSETS, "textures", "item", "resource_filter.png"), SIZE, SIZE,
-              [[FILTER_PALETTE[c] for c in row] for row in FILTER_ART])
+    write_item_texture("resource_filter", filter_texture)
     write_json(os.path.join(ASSETS, "models", "item", "resource_filter.json"),
                {"parent": "minecraft:item/generated", "textures": {"layer0": f"{MODID}:item/resource_filter"}})
 
@@ -224,7 +348,8 @@ UPGRADE_OUTLINE = (0x1E, 0x20, 0x26)
 UPGRADE_PANEL = (0x2C, 0x2F, 0x38)
 
 
-def upgrade_texture(kind, tier):
+def upgrade_texture(kind, tier, frame=0):
+    """A highlight sweeps over the symbol from left to right and runs along the lit tier pips."""
     colour, symbol = UPGRADE_SYMBOLS[kind]
     border = UPGRADE_BORDERS[tier]
     rows = []
@@ -241,10 +366,12 @@ def upgrade_texture(kind, tier):
                 px = mul(border, 1.0 if (x == 2 or y == 2) else 0.72)   # lit top/left, shaded bottom/right
             else:
                 px = UPGRADE_PANEL
+                sweep = max(0.0, math.cos(2 * math.pi * (frame / ITEM_FRAMES - (x - 4) / 10.0)))
                 if 4 <= x <= 11 and 3 <= y <= 8 and symbol[y - 3][x - 4] == "#":
                     px = mix(colour, WHITE, 0.35) if y <= 5 else colour
+                    px = mix(mul(px, 0.85), WHITE, 0.45 * sweep)
                 if y in (10, 11) and x in (4, 6, 8, 10):                # tier pips
-                    px = border if (x - 4) // 2 < tier else mul(UPGRADE_PANEL, 0.6)
+                    px = mix(mul(border, 0.85), WHITE, 0.40 * sweep) if (x - 4) // 2 < tier else mul(UPGRADE_PANEL, 0.6)
             row.append(px + (255,) if px else (0, 0, 0, 0))
         rows.append(row)
     return rows
@@ -254,7 +381,7 @@ def generate_upgrade_items():
     for kind in UPGRADE_SYMBOLS:
         for tier in UPGRADE_TIERS:
             name = f"{kind}_upgrade_{tier}"
-            write_png(os.path.join(ASSETS, "textures", "item", name + ".png"), SIZE, SIZE, upgrade_texture(kind, tier))
+            write_item_texture(name, lambda frame, kind=kind, tier=tier: upgrade_texture(kind, tier, frame))
             write_json(os.path.join(ASSETS, "models", "item", name + ".json"),
                        {"parent": "minecraft:item/generated", "textures": {"layer0": f"{MODID}:item/{name}"}})
 
@@ -277,17 +404,41 @@ GUI_PROGRESS_EMPTY = (0x5A, 0x5A, 0x5A)
 
 GENERATOR_GUI_HEIGHT = 222
 GENERATOR_ENERGY_BAR = (9, 18, 14, 48)       # x, y, width, height of the inside of the energy bar
+GENERATOR_DISPLAY = (29, 17, 140, 32)        # dark "screen" with the three text lines
+GENERATOR_PIPS = (143, 41)                   # tier pips in the bottom right corner of the display: 8 x (2x3), 1 apart
 GENERATOR_PROGRESS_BAR = (31, 54, 60, 10)
 GENERATOR_INSTALLED_SLOTS = (98, 50)         # filter, speed, efficiency, energy
 GENERATOR_BUFFER_Y = 72
 GENERATOR_INVENTORY_Y = 140
 GENERATOR_ENERGY_FILL_UV = (176, 0)          # sprites drawn over the empty bars
 GENERATOR_PROGRESS_FILL_UV = (176, 48)
+GUI_DISPLAY = (0x1E, 0x21, 0x28)
+GUI_DISPLAY_OFF = (0x34, 0x37, 0x3F)
 
 FILTER_GUI_HEIGHT = 174
 FILTER_GHOST_Y = 18
 FILTER_INVENTORY_Y = 92
 FILTER_GHOST_SLOT = (0x7C, 0x84, 0x96)       # ghost slots are tinted so that they do not look like storage
+# Mode button: 160x20 sprites below the window: except, except (hovered), only, only (hovered).
+FILTER_BUTTON_SIZE = (160, 20)
+FILTER_BUTTON_V = 174
+FILTER_MODE_COLOURS = {"except": (0xF0, 0xA0, 0x30), "only": (0x4C, 0xDC, 0xE6)}   # as in the tooltips: gold / aqua
+FILTER_MODE_ICONS = {
+    "except": ["##.....##",
+               ".##...##.",
+               "..##.##..",
+               "...###...",
+               "..##.##..",
+               ".##...##.",
+               "##.....##"],
+    "only": [".........##",
+             "........##.",
+             ".......##..",
+             "##....##...",
+             ".##..##....",
+             "..####.....",
+             "...##......"],
+}
 
 
 class Sheet:
@@ -356,16 +507,26 @@ class Sheet:
         write_png(os.path.join(ASSETS, "textures", "gui", name + ".png"), GUI_SHEET, GUI_SHEET, self.px)
 
 
-def generate_gui():
-    # --- generator
+def generator_sheet(tier):
+    accent = ACCENTS[tier]
     sheet = Sheet()
     sheet.panel(GUI_WIDTH, GENERATOR_GUI_HEIGHT)
     x, y, w, h = GENERATOR_ENERGY_BAR
     sheet.inset(x, y, w, h, GUI_BAR_EMPTY)
     for line in range(y + 3, y + h, 4):                       # segment marks
         sheet.rect(x, line, w, 1, mul(GUI_BAR_EMPTY, 0.6))
+
+    # display: dark screen with a border in the tier colour and the tier pips
+    x, y, w, h = GENERATOR_DISPLAY
+    sheet.inset(x, y, w, h, mul(accent, 0.62))
+    sheet.rect(x + 1, y + 1, w - 2, h - 2, GUI_DISPLAY)
+    px, py = GENERATOR_PIPS
+    for pip in range(8):
+        colour = (shimmer(pip / 8.0, 0.55) if tier == 8 else accent) if pip < tier else GUI_DISPLAY_OFF
+        sheet.rect(px + pip * 3, py, 2, 3, colour)
+
     x, y, w, h = GENERATOR_PROGRESS_BAR
-    sheet.inset(x, y, w, h, GUI_PROGRESS_EMPTY)
+    sheet.inset(x, y, w, h, GUI_DISPLAY)
 
     x, y = GENERATOR_INSTALLED_SLOTS
     sheet.slots(x, y, 4, 1)
@@ -385,21 +546,57 @@ def generate_gui():
             if dy % 4 == 3:
                 shade *= 0.7
             sheet.set(u + dx, v + dy, mul(colour, shade))
-    # fill of the progress bar
+    # fill of the progress bar, in the tier colour
     u, v = GENERATOR_PROGRESS_FILL_UV
     _, _, w, h = GENERATOR_PROGRESS_BAR
     for dy in range(h):
-        shade = 1.25 if dy in (1, 2) else 0.75 if dy >= h - 2 else 1.0
+        shade = 1.25 if dy in (1, 2) else 0.70 if dy >= h - 2 else 1.0
         for dx in range(w):
-            sheet.set(u + dx, v + dy, mul((0x4C, 0xC8, 0x5E), shade))
-    sheet.save("generator")
+            colour = shimmer(dx / w * 0.5 + 0.5, 0.55) if tier == 8 else accent
+            sheet.set(u + dx, v + dy, mul(colour, shade * (0.88 if dx % 6 == 5 else 1.0)))
+    return sheet
 
-    # --- resource filter
+
+def filter_button(sheet, v, mode, hovered):
+    """One state of the mode button: a dark plate tinted in the mode colour with the mode icon on the left."""
+    w, h = FILTER_BUTTON_SIZE
+    colour = FILTER_MODE_COLOURS[mode]
+    plate = mix(UPGRADE_PANEL, colour, 0.34 if hovered else 0.20)
+    sheet.rect(0, v, w, h, GUI_LIGHT if hovered else GUI_BLACK)                 # outline
+    sheet.rect(1, v + 1, w - 2, h - 2, mul(plate, 0.62))                        # shaded bottom / right
+    sheet.rect(1, v + 1, w - 3, h - 3, mix(plate, WHITE, 0.30))                 # lit top / left
+    sheet.rect(2, v + 2, w - 4, h - 4, plate)
+    icon = FILTER_MODE_ICONS[mode]
+    ix, iy = 4 + (12 - len(icon[0])) // 2, v + (h - len(icon)) // 2
+    sheet.mask(ix + 1, iy + 1, icon, mul(plate, 0.45))                          # drop shadow
+    sheet.mask(ix, iy, icon, mix(colour, WHITE, 0.25 if hovered else 0.0))
+    sheet.rect(19, v + 3, 1, h - 6, mul(plate, 0.62))                           # separator
+    sheet.rect(20, v + 3, 1, h - 6, mix(plate, WHITE, 0.18))
+
+
+def generate_gui():
+    for tier in TIERS:
+        generator_sheet(tier).save(f"generator_tier_{tier}")
+
     sheet = Sheet()
     sheet.panel(GUI_WIDTH, FILTER_GUI_HEIGHT)
     sheet.slots(8, FILTER_GHOST_Y, 9, 2, FILTER_GHOST_SLOT)
     sheet.inventory(FILTER_INVENTORY_Y)
+    v = FILTER_BUTTON_V
+    for mode in ("except", "only"):
+        for hovered in (False, True):
+            filter_button(sheet, v, mode, hovered)
+            v += FILTER_BUTTON_SIZE[1]
     sheet.save("resource_filter")
+
+
+# --------------------------------------------------------------------------- mod logo
+
+def generate_logo():
+    """Logo shown in the mods list (logoFile in mods.toml): the tier 8 generator, 8x enlarged."""
+    frame, scale = texture_frame(8, 0), 8
+    write_png(os.path.join(ROOT, "pi_generator_logo.png"), SIZE * scale, SIZE * scale,
+              [[px for px in row for _ in range(scale)] for row in frame for _ in range(scale)])
 
 
 # --------------------------------------------------------------------------- models / blockstates / loot
@@ -410,7 +607,10 @@ def generate_models():
         write_json(os.path.join(ASSETS, "blockstates", name + ".json"),
                    {"variants": {"": {"model": f"{MODID}:block/{name}"}}})
         write_json(os.path.join(ASSETS, "models", "block", name + ".json"),
-                   {"parent": "minecraft:block/cube_all", "textures": {"all": f"{MODID}:block/{name}"}})
+                   {"parent": "minecraft:block/cube_bottom_top", "textures": {
+                       "top": f"{MODID}:block/{name}_top",
+                       "bottom": f"{MODID}:block/{name}_bottom",
+                       "side": f"{MODID}:block/{name}"}})
         write_json(os.path.join(ASSETS, "models", "item", name + ".json"),
                    {"parent": f"{MODID}:block/{name}"})
 
@@ -656,6 +856,7 @@ if __name__ == "__main__":
     generate_filter_item()
     generate_upgrade_items()
     generate_gui()
+    generate_logo()
     generate_models()
     generate_loot_and_tags()
     generate_recipes()

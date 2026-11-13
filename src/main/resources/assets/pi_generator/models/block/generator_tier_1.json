@@ -1,6 +1,8 @@
 {
-  "parent": "minecraft:block/cube_all",
+  "parent": "minecraft:block/cube_bottom_top",
   "textures": {
-    "all": "pi_generator:block/generator_tier_1"
+    "top": "pi_generator:block/generator_tier_1_top",
+    "bottom": "pi_generator:block/generator_tier_1_bottom",
+    "side": "pi_generator:block/generator_tier_1"
   }
 }

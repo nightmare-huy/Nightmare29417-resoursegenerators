@@ -17,28 +17,34 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Generator screen: energy bar, FE per tick, state, progress of the current operation, the filter slot,
- * the three upgrade slots and the output buffer.
+ * Generator screen: energy bar, a dark display with the charge, FE per tick and the state, progress of the
+ * current operation, the filter slot, the three upgrade slots and the output buffer. Every tier has its own
+ * background sheet (display border, tier pips and progress bar in the tier colour).
  *
  * <p>The positions match {@code generate_gui()} in {@code scripts/generate_resources.py}.</p>
  */
 public class GeneratorScreen extends AbstractContainerScreen<GeneratorMenu> {
-    private static final ResourceLocation TEXTURE = new ResourceLocation(PiGenerator.MODID, "textures/gui/generator.png");
 
     private static final int ENERGY_X = 9, ENERGY_Y = 18, ENERGY_WIDTH = 14, ENERGY_HEIGHT = 48;
     private static final int ENERGY_FILL_U = 176, ENERGY_FILL_V = 0;
     private static final int PROGRESS_X = 31, PROGRESS_Y = 54, PROGRESS_WIDTH = 60, PROGRESS_HEIGHT = 10;
     private static final int PROGRESS_FILL_U = 176, PROGRESS_FILL_V = 48;
-    private static final int TEXT_X = 30, TEXT_Y = 18, TEXT_LINE = 11;
+    /** Text lines of the display; they must stay inside GENERATOR_DISPLAY of the script. */
+    private static final int TEXT_X = 32, TEXT_Y = 19, TEXT_LINE = 10, TEXT_WIDTH = 134;
     /** Operations shorter than this many ticks are shown as a full progress bar (the bar would only flicker). */
     private static final int MIN_ANIMATED_TICKS = 4;
     private static final int TEXT_COLOUR = 0x404040;
+    /** Colours on the dark display. */
+    private static final int DISPLAY_COLOUR = 0xE8E8E8, DISPLAY_DIM_COLOUR = 0xA8ADB5;
+
+    private final ResourceLocation texture;
 
     public GeneratorScreen(GeneratorMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title);
         imageWidth = 176;
         imageHeight = 222;
         inventoryLabelY = GeneratorMenu.INVENTORY_Y - 12;
+        texture = new ResourceLocation(PiGenerator.MODID, "textures/gui/generator_tier_" + menu.getTier().getLevel() + ".png");
     }
 
     @Override
@@ -50,18 +56,18 @@ public class GeneratorScreen extends AbstractContainerScreen<GeneratorMenu> {
 
     @Override
     protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
-        graphics.blit(TEXTURE, leftPos, topPos, 0, 0, imageWidth, imageHeight);
+        graphics.blit(texture, leftPos, topPos, 0, 0, imageWidth, imageHeight);
 
         int energy = (int) Math.ceil((double) menu.getEnergy() * ENERGY_HEIGHT / Math.max(1, menu.getCapacity()));
         energy = Math.max(0, Math.min(ENERGY_HEIGHT, energy));
         if (energy > 0) { // filled from the bottom
-            graphics.blit(TEXTURE, leftPos + ENERGY_X, topPos + ENERGY_Y + ENERGY_HEIGHT - energy,
+            graphics.blit(texture, leftPos + ENERGY_X, topPos + ENERGY_Y + ENERGY_HEIGHT - energy,
                     ENERGY_FILL_U, ENERGY_FILL_V + ENERGY_HEIGHT - energy, ENERGY_WIDTH, energy);
         }
 
         int progress = progressWidth();
         if (progress > 0) {
-            graphics.blit(TEXTURE, leftPos + PROGRESS_X, topPos + PROGRESS_Y, PROGRESS_FILL_U, PROGRESS_FILL_V,
+            graphics.blit(texture, leftPos + PROGRESS_X, topPos + PROGRESS_Y, PROGRESS_FILL_U, PROGRESS_FILL_V,
                     progress, PROGRESS_HEIGHT);
         }
     }
@@ -79,30 +85,29 @@ public class GeneratorScreen extends AbstractContainerScreen<GeneratorMenu> {
         drawTitle(graphics);
         graphics.drawString(font, playerInventoryTitle, inventoryLabelX, inventoryLabelY, TEXT_COLOUR, false);
 
-        int width = imageWidth - 6 - TEXT_X;
-        graphics.drawString(font, fit(width, true, "gui.pi_generator.energy", menu.getEnergy(), menu.getCapacity()),
-                TEXT_X, TEXT_Y, TEXT_COLOUR, false);
-        graphics.drawString(font, fit(width, true, "gui.pi_generator.usage", menu.getEnergyPerTick()),
-                TEXT_X, TEXT_Y + TEXT_LINE, TEXT_COLOUR, false);
+        graphics.drawString(font, fit(TEXT_WIDTH, true, "gui.pi_generator.energy", menu.getEnergy(), menu.getCapacity()),
+                TEXT_X, TEXT_Y, DISPLAY_COLOUR, false);
+        graphics.drawString(font, fit(TEXT_WIDTH, true, "gui.pi_generator.usage", menu.getEnergyPerTick()),
+                TEXT_X, TEXT_Y + TEXT_LINE, DISPLAY_DIM_COLOUR, false);
         GeneratorBlockEntity.State state = menu.getState();
         graphics.drawString(font, Component.translatable("gui.pi_generator.state." + state.name().toLowerCase(Locale.ROOT)),
                 TEXT_X, TEXT_Y + 2 * TEXT_LINE, stateColour(state), false);
     }
 
-    /** The block name, or a short "Resource Generator (tier N)" where the name is wider than the window. */
+    /**
+     * The window title has its own translations ("gui.pi_generator.title.N"): some translated block names are
+     * wider than the window.
+     */
     private void drawTitle(GuiGraphics graphics) {
-        Component text = title;
-        if (font.width(text) > imageWidth - 2 * titleLabelX) {
-            text = Component.translatable("gui.pi_generator.title", menu.getTier().getLevel());
-        }
-        graphics.drawString(font, text, titleLabelX, titleLabelY, TEXT_COLOUR, false);
+        graphics.drawString(font, Component.translatable("gui.pi_generator.title." + menu.getTier().getLevel()),
+                titleLabelX, titleLabelY, TEXT_COLOUR, false);
     }
 
     private static int stateColour(GeneratorBlockEntity.State state) {
         return switch (state) {
-            case WORKING -> 0x1E7B1E;
-            case BUFFER_FULL -> 0x9A5B00;
-            case NO_ENERGY, NO_OUTPUTS -> 0xB02020;
+            case WORKING -> 0x55E06A;
+            case BUFFER_FULL -> 0xFFB030;
+            case NO_ENERGY, NO_OUTPUTS -> 0xFF5A4A;
         };
     }
 

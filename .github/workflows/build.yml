@@ -3,6 +3,14 @@ name: build
 # Runs only when started by hand (never on push).
 on:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "Commit the built jar to release/ on this branch"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -14,9 +22,31 @@ jobs:
           distribution: temurin
           java-version: 17
       - name: Build with Gradle
-        run: ./gradlew build --no-daemon --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew build --no-daemon --stacktrace 2>&1 | tee build.log
+      - name: Report the errors of a failed build
+        if: failure()
+        run: |
+          # shown as an annotation of the run, readable without downloading the log
+          message=$(grep -E "error:|What went wrong|FAILED" -A 4 build.log | head -60 | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
+          echo "::error title=Gradle build failed::$message"
       - uses: actions/upload-artifact@v4
         with:
           name: pi_generator
           path: build/libs/*.jar
           if-no-files-found: error
+      - name: Publish the jar to release/
+        if: ${{ inputs.publish }}
+        run: |
+          mkdir -p release
+          cp build/libs/pi_generator-*.jar release/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add release
+          if git diff --cached --quiet; then
+            echo "release/ is already up to date"
+          else
+            git commit -m "Update the release jar (Gradle build of ${GITHUB_SHA::7})"
+            git push
+          fi
