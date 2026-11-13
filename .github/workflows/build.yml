@@ -1,8 +1,7 @@
 name: build
 
+# Runs only when started by hand (never on push).
 on:
-  push:
-  pull_request:
   workflow_dispatch:
 
 jobs:
