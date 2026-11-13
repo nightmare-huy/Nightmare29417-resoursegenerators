@@ -1,0 +1,12 @@
+{
+  "parent": "minecraft:block/cube",
+  "textures": {
+    "particle": "pi_generator:block/energy_storage_input",
+    "north": "pi_generator:block/energy_storage_output",
+    "east": "pi_generator:block/energy_storage_input",
+    "south": "pi_generator:block/energy_storage_input",
+    "west": "pi_generator:block/energy_storage_input",
+    "up": "pi_generator:block/energy_storage_input",
+    "down": "pi_generator:block/energy_storage_input"
+  }
+}

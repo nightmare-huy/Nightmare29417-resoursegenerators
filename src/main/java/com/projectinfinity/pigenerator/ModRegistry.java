@@ -1,20 +1,26 @@
 package com.projectinfinity.pigenerator;
 
 import com.mojang.serialization.MapCodec;
+import com.projectinfinity.pigenerator.block.EnergyStorageBlock;
 import com.projectinfinity.pigenerator.block.GeneratorBlock;
+import com.projectinfinity.pigenerator.blockentity.EnergyStorageBlockEntity;
 import com.projectinfinity.pigenerator.blockentity.GeneratorBlockEntity;
 import com.projectinfinity.pigenerator.item.CoreItem;
 import com.projectinfinity.pigenerator.item.FilterData;
 import com.projectinfinity.pigenerator.item.ResourceFilterItem;
 import com.projectinfinity.pigenerator.item.UpgradeItem;
+import com.projectinfinity.pigenerator.menu.EnergyStorageMenu;
 import com.projectinfinity.pigenerator.menu.FilterMenu;
 import com.projectinfinity.pigenerator.menu.GeneratorMenu;
 import com.projectinfinity.pigenerator.recipe.CoreRecipesCondition;
 import com.projectinfinity.pigenerator.recipe.RecipeSerializerExistsCondition;
 import com.projectinfinity.pigenerator.upgrade.UpgradeType;
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.DataResult;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTab;
@@ -34,6 +40,7 @@ import net.neoforged.neoforge.registries.DeferredItem;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.neoforged.neoforge.registries.NeoForgeRegistries;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -41,8 +48,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * All registry entries of the mod: 8 blocks and their items, the filter and its data component, 12 upgrades,
- * 3 cores, the block entity type, the two menus, the two recipe conditions and the creative tab.
+ * All registry entries of the mod: 8 generator blocks, the energy storage block and their items, the filter,
+ * 12 upgrades, 3 cores, two data components, two block entity types, three menus, the two recipe conditions
+ * and the creative tab.
  */
 public final class ModRegistry {
     public static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks(PiGenerator.MODID);
@@ -106,6 +114,34 @@ public final class ModRegistry {
     public static final DeferredItem<CoreItem> INFINITY_CORE =
             ITEMS.register("infinity_core", () -> new CoreItem(8, Rarity.EPIC));
 
+    /** Energy storage block: unlimited capacity, one kind, see {@link EnergyStorageBlock}. */
+    public static final DeferredBlock<EnergyStorageBlock> ENERGY_STORAGE =
+            BLOCKS.register("energy_storage", () -> new EnergyStorageBlock());
+    public static final DeferredItem<BlockItem> ENERGY_STORAGE_ITEM = ITEMS.register("energy_storage",
+            () -> new BlockItem(ENERGY_STORAGE.get(), new Item.Properties().rarity(Rarity.EPIC)));
+
+    /**
+     * Energy kept in an energy storage item: {@code pi_generator:energy}, a decimal string because the amount
+     * has no upper limit, e.g. {@code "12345678901234567890"}.
+     */
+    public static final DeferredHolder<DataComponentType<?>, DataComponentType<BigInteger>> STORED_ENERGY =
+            DATA_COMPONENTS.registerComponentType("energy", builder -> builder
+                    .persistent(Codec.STRING.comapFlatMap(ModRegistry::parseEnergy, BigInteger::toString))
+                    .networkSynchronized(ByteBufCodecs.STRING_UTF8.map(BigInteger::new, BigInteger::toString)));
+
+    private static DataResult<BigInteger> parseEnergy(String text) {
+        try {
+            BigInteger value = new BigInteger(text.trim());
+            return value.signum() >= 0 ? DataResult.success(value) : DataResult.error(() -> "Negative energy: " + text);
+        } catch (NumberFormatException e) {
+            return DataResult.error(() -> "Not a whole number: " + text);
+        }
+    }
+
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<EnergyStorageBlockEntity>> ENERGY_STORAGE_BLOCK_ENTITY =
+            BLOCK_ENTITY_TYPES.register("energy_storage", () -> BlockEntityType.Builder.of(
+                    EnergyStorageBlockEntity::new, ENERGY_STORAGE.get()).build(null));
+
     /** One block entity type shared by all tiers; the tier is taken from the block. */
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<GeneratorBlockEntity>> GENERATOR_BLOCK_ENTITY =
             BLOCK_ENTITY_TYPES.register("generator", () -> BlockEntityType.Builder.of(
@@ -121,6 +157,10 @@ public final class ModRegistry {
     public static final DeferredHolder<MenuType<?>, MenuType<FilterMenu>> FILTER_MENU =
             MENU_TYPES.register("resource_filter", () -> IMenuTypeExtension.create(FilterMenu::new));
 
+    /** Screen of the energy storage block; the extra data (the block position) is not used. */
+    public static final DeferredHolder<MenuType<?>, MenuType<EnergyStorageMenu>> ENERGY_STORAGE_MENU =
+            MENU_TYPES.register("energy_storage", () -> IMenuTypeExtension.create(EnergyStorageMenu::new));
+
     /** Recipe conditions, used in the {@code "neoforge:conditions"} list of the recipe files. */
     public static final DeferredHolder<MapCodec<? extends ICondition>, MapCodec<RecipeSerializerExistsCondition>> RECIPE_SERIALIZER_EXISTS =
             CONDITIONS.register("recipe_serializer_exists", () -> RecipeSerializerExistsCondition.CODEC);
@@ -133,6 +173,7 @@ public final class ModRegistry {
                     .icon(() -> new ItemStack(GENERATOR_ITEMS.get(GeneratorTier.TIER_8).get()))
                     .displayItems((parameters, output) -> {
                         GENERATOR_ITEMS.values().forEach(item -> output.accept(item.get()));
+                        output.accept(ENERGY_STORAGE_ITEM.get());
                         output.accept(RESOURCE_FILTER.get());
                         UPGRADES.forEach(upgrade -> output.accept(upgrade.get()));
                         output.accept(CRYSTAL_CORE.get());
@@ -160,6 +201,9 @@ public final class ModRegistry {
                 (generator, side) -> generator.getEnergyStorage());
         event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, GENERATOR_BLOCK_ENTITY.get(),
                 (generator, side) -> generator.getOutputView());
+        // the energy storage block answers per side: input, output or nothing (side switched off)
+        event.registerBlockEntity(Capabilities.EnergyStorage.BLOCK, ENERGY_STORAGE_BLOCK_ENTITY.get(),
+                EnergyStorageBlockEntity::getEnergyView);
     }
 
     private ModRegistry() {

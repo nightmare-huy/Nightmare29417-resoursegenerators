@@ -1,0 +1,27 @@
+{
+  "ambientocclusion": true,
+  "textures": {
+    "face": "pi_generator:block/energy_storage_input",
+    "particle": "pi_generator:block/energy_storage_input"
+  },
+  "elements": [
+    {
+      "from": [
+        0,
+        0,
+        0
+      ],
+      "to": [
+        16,
+        16,
+        16
+      ],
+      "faces": {
+        "north": {
+          "texture": "#face",
+          "cullface": "north"
+        }
+      }
+    }
+  ]
+}

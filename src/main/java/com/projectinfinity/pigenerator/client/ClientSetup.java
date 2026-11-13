@@ -9,6 +9,7 @@ public final class ClientSetup {
     public static void registerScreens(RegisterMenuScreensEvent event) {
         event.register(ModRegistry.GENERATOR_MENU.get(), GeneratorScreen::new);
         event.register(ModRegistry.FILTER_MENU.get(), FilterScreen::new);
+        event.register(ModRegistry.ENERGY_STORAGE_MENU.get(), EnergyStorageScreen::new);
     }
 
     private ClientSetup() {

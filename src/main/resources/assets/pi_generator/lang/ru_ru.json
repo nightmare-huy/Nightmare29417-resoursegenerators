@@ -80,5 +80,25 @@
   "item.pi_generator.neutron_core": "Нейтронное ядро",
   "item.pi_generator.infinity_core": "Ядро Бесконечности",
   "tooltip.pi_generator.core": "Генератор %s уровня: 8 ядер вокруг генератора %s уровня",
-  "tooltip.pi_generator.core.no_avaritia": "Способ крафта без Avaritia"
+  "tooltip.pi_generator.core.no_avaritia": "Способ крафта без Avaritia",
+
+  "block.pi_generator.energy_storage": "Блок хранения энергии",
+  "tooltip.pi_generator.energy_storage.stored": "Запас: %s FE",
+  "tooltip.pi_generator.energy_storage.capacity": "Ёмкость: без ограничения",
+  "tooltip.pi_generator.energy_storage.help_place": "Сторона, к которой приставлен блок, отдаёт энергию, остальные принимают",
+  "tooltip.pi_generator.energy_storage.help_sides": "Shift + ПКМ пустой рукой по стороне: приём / отдача / выключено",
+  "gui.pi_generator.energy_storage.stored": "Запас: %s FE",
+  "gui.pi_generator.energy_storage.received": "Приём: %s FE/т",
+  "gui.pi_generator.energy_storage.sent": "Отдача: %s FE/т",
+  "gui.pi_generator.energy_storage.side": "%s: %s",
+  "gui.pi_generator.energy_storage.side_hint": "Нажмите, чтобы переключить сторону: приём, отдача, выключено",
+  "side.pi_generator.down": "Низ",
+  "side.pi_generator.up": "Верх",
+  "side.pi_generator.north": "Север",
+  "side.pi_generator.south": "Юг",
+  "side.pi_generator.west": "Запад",
+  "side.pi_generator.east": "Восток",
+  "mode.pi_generator.input": "приём",
+  "mode.pi_generator.output": "отдача",
+  "mode.pi_generator.off": "выкл."
 }

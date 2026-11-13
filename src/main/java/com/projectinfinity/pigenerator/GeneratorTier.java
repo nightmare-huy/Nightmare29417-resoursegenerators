@@ -34,20 +34,21 @@ public enum GeneratorTier {
             "minecraft:quartz=8",
             // common modded ores: one entry per material, taken from the first of the listed mods that is installed
             "mekanism:raw_osmium|alltheores:raw_osmium=8",
-            "mekanism:raw_tin|alltheores:raw_tin=10",
-            "mekanism:raw_lead|alltheores:raw_lead|immersiveengineering:raw_lead=8",
-            "alltheores:raw_silver|immersiveengineering:raw_silver|occultism:raw_silver=6",
-            "alltheores:raw_nickel|immersiveengineering:raw_nickel=6",
+            "thermal:raw_tin|mekanism:raw_tin|alltheores:raw_tin=10",
+            "thermal:raw_lead|mekanism:raw_lead|alltheores:raw_lead|immersiveengineering:raw_lead=8",
+            "thermal:raw_silver|alltheores:raw_silver|immersiveengineering:raw_silver|occultism:raw_silver=6",
+            "thermal:raw_nickel|alltheores:raw_nickel|immersiveengineering:raw_nickel=6",
             "alltheores:raw_aluminum|immersiveengineering:raw_aluminum=8",
             "create:raw_zinc|alltheores:raw_zinc=8",
             "mekanism:fluorite_gem|alltheores:fluorite=6",
+            "thermal:apatite=8",
             "alltheores:cinnabar=5", "alltheores:sulfur|mekanism:dust_sulfur=6",
             "actuallyadditions:black_quartz=6",
             "mysticalagriculture:inferium_essence=8", "mysticalagriculture:prosperity_shard=5",
             "alltheores:ruby=3", "alltheores:sapphire=3", "alltheores:peridot=3"),
 
     TIER_2(2, 1_024, 500_000, 35, false, Inherit.PREVIOUS, Rarity.COMMON, ChatFormatting.GREEN,
-            "mekanism:ingot_steel=4", "mekanism:ingot_bronze=4",
+            "mekanism:ingot_steel=4", "mekanism:ingot_bronze=4", "thermal:invar_ingot=4", "thermal:electrum_ingot=3",
             "ae2:certus_quartz_crystal=8",
             // radioactive and Nether / End ores
             "powah:uraninite_raw=6", "bigreactors:raw_yellorium=6",
@@ -56,13 +57,14 @@ public enum GeneratorTier {
 
     TIER_3(3, 8_192, 2_000_000, 30, false, Inherit.NONE, Rarity.UNCOMMON, ChatFormatting.AQUA,
             "ae2:fluix_crystal=10", "mekanism:ingot_refined_glowstone=5",
+            "thermal:signalum_ingot=5", "thermal:lumium_ingot=5",
             "mekanism:alloy_infused=8", "mekanism:ingot_refined_obsidian=3",
             // rare ores
             "alltheores:raw_platinum=4", "alltheores:raw_iridium=3", "occultism:raw_iesnium=4",
             "ad_astra:raw_desh=5"),
 
     TIER_4(4, 65_536, 10_000_000, 20, false, Inherit.NONE, Rarity.UNCOMMON, ChatFormatting.BLUE,
-            "mekanism:alloy_reinforced=6", "ae2:calculation_processor=8",
+            "thermal:enderium_ingot=3", "mekanism:alloy_reinforced=6", "ae2:calculation_processor=8",
             "ae2:engineering_processor=8", "ae2:logic_processor=8",
             "mekanism:raw_uranium|alltheores:raw_uranium|immersiveengineering:raw_uranium=6",
             "draconicevolution:draconium_dust=4", "ad_astra:raw_ostrum=4", "ad_astra:raw_calorite=3",

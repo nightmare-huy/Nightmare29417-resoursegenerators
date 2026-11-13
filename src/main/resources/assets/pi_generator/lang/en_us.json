@@ -80,5 +80,25 @@
   "item.pi_generator.neutron_core": "Neutron Core",
   "item.pi_generator.infinity_core": "Infinity Core",
   "tooltip.pi_generator.core": "Tier %s generator: 8 cores around a tier %s generator",
-  "tooltip.pi_generator.core.no_avaritia": "The way to craft it without Avaritia"
+  "tooltip.pi_generator.core.no_avaritia": "The way to craft it without Avaritia",
+
+  "block.pi_generator.energy_storage": "Energy Storage Block",
+  "tooltip.pi_generator.energy_storage.stored": "Stored: %s FE",
+  "tooltip.pi_generator.energy_storage.capacity": "Capacity: unlimited",
+  "tooltip.pi_generator.energy_storage.help_place": "The side it is placed against gives energy out, the others take it in",
+  "tooltip.pi_generator.energy_storage.help_sides": "Shift + right click a side with an empty hand: input / output / off",
+  "gui.pi_generator.energy_storage.stored": "Stored: %s FE",
+  "gui.pi_generator.energy_storage.received": "In: %s FE/t",
+  "gui.pi_generator.energy_storage.sent": "Out: %s FE/t",
+  "gui.pi_generator.energy_storage.side": "%s: %s",
+  "gui.pi_generator.energy_storage.side_hint": "Click to switch the side: input, output, off",
+  "side.pi_generator.down": "Bottom",
+  "side.pi_generator.up": "Top",
+  "side.pi_generator.north": "North",
+  "side.pi_generator.south": "South",
+  "side.pi_generator.west": "West",
+  "side.pi_generator.east": "East",
+  "mode.pi_generator.input": "input",
+  "mode.pi_generator.output": "output",
+  "mode.pi_generator.off": "off"
 }

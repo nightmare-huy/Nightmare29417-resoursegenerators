@@ -13,7 +13,8 @@ import org.slf4j.Logger;
 /**
  * Project Infinity: Resource Generators (NeoForge, Minecraft 1.21.1).
  *
- * <p>Adds eight tiers of FE-powered resource generators. The mod has no compile-time dependency on
+ * <p>Adds eight tiers of FE-powered resource generators and an energy storage block without a capacity
+ * limit. The mod has no compile-time dependency on
  * Mekanism, AE2, Avaritia or any ore mod: their items are resolved at runtime by registry id.</p>
  */
 @Mod(PiGenerator.MODID)

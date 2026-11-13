@@ -12,6 +12,10 @@ Writes into src/main/resources:
   * assets/pi_generator/textures/gui/{generator_tier_N,resource_filter}.png   (screen backgrounds, 256x256 sheets)
   * pi_generator_logo.png   (mods list logo)
   * assets/pi_generator/{textures/item,models/item}/{crystal,neutron,infinity}_core.*
+  * energy storage block: assets/pi_generator/textures/block/energy_storage_{input,output,off}.png (+ .mcmeta),
+    models/block/energy_storage_{input,output,off}.json (one face each), blockstates/energy_storage.json
+    (multipart: the face of every side follows its mode), models/item/energy_storage.json,
+    textures/gui/energy_storage.png, data/pi_generator/loot_table/blocks/energy_storage.json
   * data/pi_generator/loot_table/blocks/generator_tier_N.json
   * data/pi_generator/recipe/*.json   (the folder is emptied first)
   * data/minecraft/tags/block/{mineable/pickaxe,needs_iron_tool}.json
@@ -259,6 +263,120 @@ def generate_textures():
             write_json(path + ".mcmeta", {"animation": {"frametime": FRAMETIME[tier], "interpolate": True}})
 
 
+# --------------------------------------------------------------------------- energy storage block
+#
+# One texture per side mode. A face is the same seen from all four directions, so it can be turned freely
+# by the block state file. Around the glowing cell in the middle there is one arrow per edge: pointing to
+# the cell (input), away from it (output) or missing (side switched off, the cell is dark).
+
+ENERGY_STORAGE = f"{MODID}:energy_storage"
+STORAGE_CASING = (0x4E, 0x52, 0x62)
+STORAGE_CELL = (0xFF, 0xD8, 0x4A)
+STORAGE_MODES = {"input": (0x4C, 0xDC, 0xE6), "output": (0xF0, 0xA0, 0x30), "off": None}   # aqua / gold, as in the texts
+STORAGE_FRAMETIME = 2
+
+
+def storage_arrow(x, y):
+    """Is (x, y) part of an arrow? -> (distance from the edge: 0 outer row / 1 inner row, wide row?) or None.
+    Each arrow is two rows in the band between the frame and the cell; 'wide' is the 4 pixel row."""
+    for turn in range(4):                       # look at the pixel as if its edge was the top one
+        if y in (2, 3) and 6 <= x <= 9:
+            return y - 2, x
+        x, y = y, SIZE - 1 - x
+    return None
+
+
+def storage_frame(mode, frame=0):
+    colour = STORAGE_MODES[mode]
+    noise = random.Random(4000)
+    rows = []
+    for y in range(SIZE):
+        row = []
+        for x in range(SIZE):
+            n = noise.uniform(-0.05, 0.05)
+            edge = min(x, y, SIZE - 1 - x, SIZE - 1 - y)
+            if edge == 0:                                                   # outer frame
+                px = mul(STORAGE_CASING, 0.42)
+            elif edge == 1:                                                 # bevel
+                px = mul(STORAGE_CASING, 1.25 if (x == 1 or y == 1) and x != 14 and y != 14 else 0.68)
+            else:
+                px = mul(STORAGE_CASING, 0.92 + n)
+            if (x in (2, 13)) and (y in (2, 13)):                           # rivets: lit in the mode colour
+                px = mul(STORAGE_CASING, 1.5) if colour is None else mix(mul(STORAGE_CASING, 1.5), colour, 0.55)
+            arrow = storage_arrow(x, y)
+            if arrow is not None and colour is not None:
+                depth, along = arrow
+                # input: wide row outside, tip towards the cell; output: the other way round
+                wide = depth == (0 if mode == "input" else 1)
+                if wide or along in (7, 8):
+                    # a pulse runs along the arrow in the direction the energy flows
+                    position = depth if mode == "input" else 1 - depth
+                    wave = 0.5 + 0.5 * math.cos(2 * math.pi * (frame / FRAMES - position / 2.0))
+                    px = mix(mul(colour, 0.55), mix(colour, WHITE, 0.45), wave)
+            if 4 <= x <= 11 and 4 <= y <= 11:                               # socket + cell
+                px = mul(STORAGE_CASING, 0.36)
+                if 5 <= x <= 10 and 5 <= y <= 10:
+                    dist = max(abs(x - 7.5), abs(y - 7.5))                  # 0.5 (centre) .. 2.5 (edge)
+                    if colour is None:
+                        px = mul(STORAGE_CASING, 0.62 - 0.08 * (dist - 0.5))   # switched off: dark glass
+                        if (x, y) in ((6, 6), (7, 6), (6, 7)):
+                            px = mul(STORAGE_CASING, 0.85)                  # reflection
+                    else:
+                        # plasma: two waves crossing each other, brightest in the middle
+                        wave = (0.5 + 0.25 * math.sin(2 * math.pi * (frame / FRAMES + (x + y) / 9.0))
+                                + 0.25 * math.sin(2 * math.pi * (2 * frame / FRAMES - (x - y) / 7.0)))
+                        glow = 1.25 - 0.20 * (dist - 0.5)
+                        px = mix(mul(STORAGE_CELL, glow * (0.70 + 0.30 * wave)), WHITE,
+                                 0.55 * wave * (1.0 - (dist - 0.5) / 2.5))
+            row.append(px)
+        rows.append(row)
+    return rows
+
+
+def generate_energy_storage():
+    tex_dir = os.path.join(ASSETS, "textures", "block")
+    name = "energy_storage"
+    for mode in STORAGE_MODES:
+        path = os.path.join(tex_dir, f"{name}_{mode}.png")
+        if mode == "off":                                   # nothing moves on a switched off side
+            write_png(path, SIZE, SIZE, storage_frame(mode))
+        else:
+            rows = []
+            for frame in range(FRAMES):
+                rows.extend(storage_frame(mode, frame))
+            write_png(path, SIZE, SIZE * FRAMES, rows)
+            write_json(path + ".mcmeta", {"animation": {"frametime": STORAGE_FRAMETIME, "interpolate": True}})
+        # one face (north) of a full cube; the block state file turns it to the side it belongs to
+        texture = f"{MODID}:block/{name}_{mode}"
+        write_json(os.path.join(ASSETS, "models", "block", f"{name}_{mode}.json"), {
+            "ambientocclusion": True,
+            "textures": {"face": texture, "particle": texture},
+            "elements": [{"from": [0, 0, 0], "to": [16, 16, 16],
+                          "faces": {"north": {"texture": "#face", "cullface": "north"}}}],
+        })
+    turns = {"north": {}, "east": {"y": 90}, "south": {"y": 180}, "west": {"y": 270}, "up": {"x": 270}, "down": {"x": 90}}
+    write_json(os.path.join(ASSETS, "blockstates", name + ".json"), {"multipart": [
+        {"when": {side: mode}, "apply": {"model": f"{MODID}:block/{name}_{mode}", **turn}}
+        for side, turn in turns.items() for mode in STORAGE_MODES]})
+    # the item: an output at the front, inputs elsewhere
+    write_json(os.path.join(ASSETS, "models", "item", name + ".json"), {
+        "parent": "minecraft:block/cube",
+        "textures": {"particle": f"{MODID}:block/{name}_input",
+                     **{side: f"{MODID}:block/{name}_{'output' if side == 'north' else 'input'}" for side in turns}}})
+    # dropped with the energy inside
+    write_json(os.path.join(DATA, "loot_table", "blocks", name + ".json"), {
+        "type": "minecraft:block",
+        "pools": [{
+            "rolls": 1.0,
+            "bonus_rolls": 0.0,
+            "entries": [{"type": "minecraft:item", "name": ENERGY_STORAGE, "functions": [
+                {"function": "minecraft:copy_components", "source": "block_entity", "include": [f"{MODID}:energy"]}]}],
+            "conditions": [{"condition": "minecraft:survives_explosion"}],
+        }],
+        "random_sequence": f"{MODID}:blocks/{name}",
+    })
+
+
 FILTER_ART = [
     "................",
     ".oooooooooooooo.",
@@ -461,6 +579,10 @@ GENERATOR_PROGRESS_FILL_UV = (176, 48)
 GUI_DISPLAY = (0x1E, 0x21, 0x28)
 GUI_DISPLAY_OFF = (0x34, 0x37, 0x3F)
 
+ENERGY_STORAGE_GUI_HEIGHT = 130
+ENERGY_STORAGE_DISPLAY = (9, 18, 158, 34)    # dark "screen" with the three text lines
+ENERGY_STORAGE_BUTTONS = (7, 58, 80, 20, 2)  # x, y, width, height, gap: 2 columns x 3 rows of vanilla buttons
+
 FILTER_GUI_HEIGHT = 174
 FILTER_GHOST_Y = 18
 FILTER_INVENTORY_Y = 92
@@ -635,6 +757,14 @@ def generate_gui():
             v += FILTER_BUTTON_SIZE[1]
     sheet.save("resource_filter")
 
+    # energy storage: only a display, the six side buttons are vanilla widgets drawn by the screen
+    sheet = Sheet()
+    sheet.panel(GUI_WIDTH, ENERGY_STORAGE_GUI_HEIGHT)
+    x, y, w, h = ENERGY_STORAGE_DISPLAY
+    sheet.inset(x, y, w, h, mul(STORAGE_CELL, 0.62))
+    sheet.rect(x + 1, y + 1, w - 2, h - 2, GUI_DISPLAY)
+    sheet.save("energy_storage")
+
 
 # --------------------------------------------------------------------------- mod logo
 
@@ -674,7 +804,7 @@ def generate_loot_and_tags():
             }],
             "random_sequence": f"{MODID}:blocks/{name}",
         })
-    values = [gen(t) for t in TIERS]
+    values = [gen(t) for t in TIERS] + [ENERGY_STORAGE]
     tags = os.path.join(ROOT, "data", "minecraft", "tags", "block")
     write_json(os.path.join(tags, "mineable", "pickaxe.json"), {"replace": False, "values": values})
     write_json(os.path.join(tags, "needs_iron_tool.json"), {"replace": False, "values": values})
@@ -756,6 +886,13 @@ NEUTRONIUM_NAMES = [
     ("", {"ingot": "avaritia:neutron_ingot", "block": "avaritia:neutron"}),
     ("_neutronium", {"ingot": "avaritia:neutronium_ingot", "block": "avaritia:neutronium_block"}),
 ]
+
+
+def generate_energy_storage_recipe():
+    """Energy storage block: end game Mekanism and AE2 energy parts around an ultimate energy cube."""
+    key = {"U": "mekanism:ultimate_energy_cube", "I": "mekanism:ultimate_induction_cell",
+           "D": "ae2:dense_energy_cell", "A": "mekanism:pellet_antimatter"}
+    write_recipe("energy_storage", shaped(["AIA", "DUD", "AIA"], key, ENERGY_STORAGE), mods_of(key))
 
 
 def generate_filter_recipes():
@@ -908,6 +1045,7 @@ if __name__ == "__main__":
     generate_filter_item()
     generate_upgrade_items()
     generate_core_items()
+    generate_energy_storage()
     generate_gui()
     generate_logo()
     generate_models()
@@ -916,4 +1054,5 @@ if __name__ == "__main__":
     generate_recipes()
     generate_filter_recipes()
     generate_upgrade_recipes()
+    generate_energy_storage_recipe()
     print("resources written to", os.path.normpath(ROOT))

@@ -40,12 +40,12 @@ jobs:
         if: ${{ inputs.publish }}
         run: |
           mkdir -p release
-          # only the current build is kept (jars of older versions, e.g. the Forge 1.20.1 one, are removed)
-          rm -f release/pi_generator-*.jar
+          # Only the jar of this build is added or replaced. Jars of other versions stay where they are:
+          # release/pi_generator-0.1.jar is the Forge 1.20.1 version and must not be deleted.
           cp build/libs/pi_generator-*.jar release/
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A release
+          git add release
           if git diff --cached --quiet; then
             echo "release/ is already up to date"
           else
