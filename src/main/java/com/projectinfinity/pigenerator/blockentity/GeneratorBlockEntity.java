@@ -5,11 +5,13 @@ import com.projectinfinity.pigenerator.ModRegistry;
 import com.projectinfinity.pigenerator.block.GeneratorBlock;
 import com.projectinfinity.pigenerator.energy.GeneratorEnergyStorage;
 import com.projectinfinity.pigenerator.item.OutputOnlyItemHandler;
+import com.projectinfinity.pigenerator.item.ResourceFilterItem;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.world.Containers;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -37,6 +39,7 @@ import java.util.List;
  *   <li>27 slot output buffer exposed as an (extract only) item handler on every side.</li>
  *   <li>Generated items are pushed straight into adjacent inventories (ME interfaces, chests, pipes);
  *       only what does not fit is kept in the buffer and retried periodically.</li>
+ *   <li>An optional {@link ResourceFilterItem resource filter} limits which of the tier's outputs are made.</li>
  * </ul>
  */
 public class GeneratorBlockEntity extends BlockEntity {
@@ -48,6 +51,7 @@ public class GeneratorBlockEntity extends BlockEntity {
     private static final String TAG_PROGRESS = "Progress";
     private static final String TAG_OUTPUT_INDEX = "OutputIndex";
     private static final String TAG_INVENTORY = "Inventory";
+    private static final String TAG_FILTER = "Filter";
 
     private final GeneratorTier tier;
     private final GeneratorEnergyStorage energy;
@@ -66,6 +70,12 @@ public class GeneratorBlockEntity extends BlockEntity {
     private int outputIndex;
     private int flushTimer;
 
+    /** Installed resource filter, or {@link ItemStack#EMPTY}. */
+    private ItemStack filter = ItemStack.EMPTY;
+    /** The tier's outputs that pass the filter; {@code null} until computed or after the filter changed. */
+    @Nullable
+    private List<Item> activeOutputs;
+
     public GeneratorBlockEntity(BlockPos pos, BlockState state) {
         super(ModRegistry.GENERATOR_BLOCK_ENTITY.get(), pos, state);
         this.tier = state.getBlock() instanceof GeneratorBlock block ? block.getTier() : GeneratorTier.TIER_1;
@@ -81,6 +91,45 @@ public class GeneratorBlockEntity extends BlockEntity {
         return energy.getEnergyStored();
     }
 
+    // ------------------------------------------------------------------ filter
+
+    public boolean hasFilter() {
+        return !filter.isEmpty();
+    }
+
+    public ItemStack getFilter() {
+        return filter;
+    }
+
+    /** Installs the given filter ({@link ItemStack#EMPTY} removes it) and returns the previous one. */
+    public ItemStack setFilter(ItemStack newFilter) {
+        ItemStack previous = filter;
+        filter = newFilter;
+        activeOutputs = null;
+        outputIndex = 0;
+        markDirty();
+        return previous;
+    }
+
+    /** Outputs of the tier that exist in this instance and pass the installed filter. */
+    public List<Item> getActiveOutputs() {
+        List<Item> outputs = activeOutputs;
+        if (outputs == null) {
+            outputs = tier.getOutputs();
+            if (!filter.isEmpty()) {
+                List<Item> allowed = new ArrayList<>(outputs.size());
+                for (Item item : outputs) {
+                    if (ResourceFilterItem.allows(filter, item)) {
+                        allowed.add(item);
+                    }
+                }
+                outputs = allowed;
+            }
+            activeOutputs = outputs;
+        }
+        return outputs;
+    }
+
     // ------------------------------------------------------------------ ticking
 
     public static void serverTick(Level level, BlockPos pos, BlockState state, GeneratorBlockEntity generator) {
@@ -93,9 +142,9 @@ public class GeneratorBlockEntity extends BlockEntity {
             flushBuffer(level, pos);
         }
 
-        List<Item> outputs = tier.getOutputs();
+        List<Item> outputs = getActiveOutputs();
         if (outputs.isEmpty()) {
-            return; // none of the output items exist in this instance
+            return; // nothing to make (filtered out or not present in this instance): idle, no energy is used
         }
         if (outputIndex >= outputs.size()) {
             outputIndex = 0;
@@ -192,17 +241,29 @@ public class GeneratorBlockEntity extends BlockEntity {
                 inventory.setStackInSlot(slot, ItemStack.EMPTY);
             }
         }
+        if (!filter.isEmpty()) {
+            Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), setFilter(ItemStack.EMPTY));
+        }
     }
 
     // ------------------------------------------------------------------ status
 
-    /** Action bar text shown on right click: tier, stored / max FE and FE per tick. */
+    /** Action bar text shown on right click: tier, stored / max FE, FE per tick and the filter (if any). */
     public Component getStatusMessage() {
-        return Component.translatable("message.pi_generator.status",
+        MutableComponent status = Component.translatable("message.pi_generator.status",
                 Component.literal(String.valueOf(tier.getLevel())).withStyle(tier.getColor()),
                 Component.literal(GeneratorBlock.formatNumber(energy.getEnergyStored())).withStyle(ChatFormatting.GREEN),
                 Component.literal(GeneratorBlock.formatNumber(energy.getMaxEnergyStored())).withStyle(ChatFormatting.GREEN),
                 Component.literal(GeneratorBlock.formatNumber(tier.getEnergyPerTick())).withStyle(ChatFormatting.YELLOW));
+        if (!filter.isEmpty()) {
+            status.append(" | ").append(Component.translatable("message.pi_generator.status.filter",
+                    ResourceFilterItem.describe(filter)));
+            if (getActiveOutputs().isEmpty()) {
+                status.append(" ").append(Component.translatable("message.pi_generator.status.nothing")
+                        .withStyle(ChatFormatting.RED));
+            }
+        }
+        return status;
     }
 
     // ------------------------------------------------------------------ capabilities
@@ -255,6 +316,9 @@ public class GeneratorBlockEntity extends BlockEntity {
         tag.putInt(TAG_PROGRESS, progress);
         tag.putInt(TAG_OUTPUT_INDEX, outputIndex);
         tag.put(TAG_INVENTORY, inventory.serializeNBT());
+        if (!filter.isEmpty()) {
+            tag.put(TAG_FILTER, filter.save(new CompoundTag()));
+        }
     }
 
     @Override
@@ -268,5 +332,7 @@ public class GeneratorBlockEntity extends BlockEntity {
             inventoryTag.putInt("Size", SLOTS); // the buffer size is fixed, ignore whatever was saved
             inventory.deserializeNBT(inventoryTag);
         }
+        filter = tag.contains(TAG_FILTER) ? ItemStack.of(tag.getCompound(TAG_FILTER)) : ItemStack.EMPTY;
+        activeOutputs = null;
     }
 }

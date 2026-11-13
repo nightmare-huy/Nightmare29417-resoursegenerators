@@ -3,6 +3,7 @@ package com.projectinfinity.pigenerator.block;
 import com.projectinfinity.pigenerator.GeneratorTier;
 import com.projectinfinity.pigenerator.ModRegistry;
 import com.projectinfinity.pigenerator.blockentity.GeneratorBlockEntity;
+import com.projectinfinity.pigenerator.item.ResourceFilterItem;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -23,6 +24,7 @@ import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraftforge.items.ItemHandlerHelper;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -70,17 +72,42 @@ public class GeneratorBlock extends BaseEntityBlock {
         return RenderShape.MODEL;
     }
 
-    /** Right click: show tier and charge in the action bar (there is intentionally no GUI). */
+    /**
+     * Right click (there is intentionally no GUI):
+     * <ul>
+     *   <li>holding a resource filter: install it, a filter that was already installed is handed back;</li>
+     *   <li>sneaking with an empty hand: take the installed filter out;</li>
+     *   <li>otherwise: show tier, charge and filter in the action bar.</li>
+     * </ul>
+     */
     @Override
     public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player,
                                  InteractionHand hand, BlockHitResult hit) {
         if (!level.isClientSide && level.getBlockEntity(pos) instanceof GeneratorBlockEntity generator) {
-            player.displayClientMessage(generator.getStatusMessage(), true);
+            ItemStack held = player.getItemInHand(hand);
+            if (held.getItem() instanceof ResourceFilterItem) {
+                ItemStack previous = generator.setFilter(held.split(1));
+                if (!previous.isEmpty()) {
+                    if (player.getItemInHand(hand).isEmpty()) {
+                        player.setItemInHand(hand, previous);
+                    } else {
+                        ItemHandlerHelper.giveItemToPlayer(player, previous);
+                    }
+                }
+                player.displayClientMessage(Component.translatable("message.pi_generator.filter.installed",
+                        ResourceFilterItem.describe(generator.getFilter())).withStyle(ChatFormatting.GREEN), true);
+            } else if (player.isShiftKeyDown() && held.isEmpty() && generator.hasFilter()) {
+                player.setItemInHand(hand, generator.setFilter(ItemStack.EMPTY));
+                player.displayClientMessage(Component.translatable("message.pi_generator.filter.taken")
+                        .withStyle(ChatFormatting.YELLOW), true);
+            } else {
+                player.displayClientMessage(generator.getStatusMessage(), true);
+            }
         }
         return InteractionResult.sidedSuccess(level.isClientSide);
     }
 
-    /** Drop the buffered items when the block is broken or replaced. */
+    /** Drop the buffered items and the installed filter when the block is broken or replaced. */
     @SuppressWarnings("deprecation")
     @Override
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {

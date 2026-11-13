@@ -15,5 +15,26 @@
   "tooltip.pi_generator.buffer": "Буфер энергии: %s FE",
   "tooltip.pi_generator.cycle": "Цикл: %s тик.",
 
-  "message.pi_generator.status": "Генератор, уровень %s | Заряд: %s / %s FE | Расход: %s FE/т"
+  "message.pi_generator.status": "Генератор, уровень %s | Заряд: %s / %s FE | Расход: %s FE/т",
+
+  "item.pi_generator.resource_filter": "Фильтр ресурсов",
+  "filter.pi_generator.mode.only": "только выбранное",
+  "filter.pi_generator.mode.except": "всё, кроме выбранного",
+  "tooltip.pi_generator.filter.mode": "Режим: %s",
+  "tooltip.pi_generator.filter.empty_except": "Список пуст: ничего не фильтруется",
+  "tooltip.pi_generator.filter.empty_only": "Список пуст: генератор ничего не произведёт",
+  "tooltip.pi_generator.filter.help_toggle": "ПКМ с ресурсом во второй руке: добавить / убрать его",
+  "tooltip.pi_generator.filter.help_mode": "Shift + ПКМ: сменить режим",
+  "tooltip.pi_generator.filter.help_install": "ПКМ по генератору: установить фильтр",
+  "tooltip.pi_generator.filter.help_remove": "Shift + ПКМ по генератору пустой рукой: вынуть фильтр",
+  "message.pi_generator.filter.mode": "Режим фильтра: %s",
+  "message.pi_generator.filter.hint": "Возьмите ресурс во вторую руку и нажмите ПКМ",
+  "message.pi_generator.filter.added": "Добавлено в фильтр: %s",
+  "message.pi_generator.filter.removed": "Убрано из фильтра: %s",
+  "message.pi_generator.filter.full": "Фильтр заполнен (%s позиций)",
+  "message.pi_generator.filter.summary": "%s (%s)",
+  "message.pi_generator.filter.installed": "Фильтр установлен: %s",
+  "message.pi_generator.filter.taken": "Фильтр извлечён",
+  "message.pi_generator.status.filter": "Фильтр: %s",
+  "message.pi_generator.status.nothing": "- нечего производить!"
 }

@@ -2,6 +2,7 @@ package com.projectinfinity.pigenerator;
 
 import com.projectinfinity.pigenerator.block.GeneratorBlock;
 import com.projectinfinity.pigenerator.blockentity.GeneratorBlockEntity;
+import com.projectinfinity.pigenerator.item.ResourceFilterItem;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.BlockItem;
@@ -19,7 +20,7 @@ import java.util.Collections;
 import java.util.EnumMap;
 import java.util.Map;
 
-/** All registry entries of the mod: 8 blocks, 8 block items, the block entity type and the creative tab. */
+/** All registry entries of the mod: 8 blocks, 8 block items, the filter item, the block entity type and the creative tab. */
 public final class ModRegistry {
     public static final DeferredRegister<Block> BLOCKS =
             DeferredRegister.create(ForgeRegistries.BLOCKS, PiGenerator.MODID);
@@ -47,6 +48,10 @@ public final class ModRegistry {
         GENERATOR_ITEMS = Collections.unmodifiableMap(items);
     }
 
+    /** Decides which outputs a generator makes, see {@link ResourceFilterItem}. */
+    public static final RegistryObject<ResourceFilterItem> RESOURCE_FILTER =
+            ITEMS.register("resource_filter", ResourceFilterItem::new);
+
     /** One block entity type shared by all tiers; the tier is taken from the block. */
     public static final RegistryObject<BlockEntityType<GeneratorBlockEntity>> GENERATOR_BLOCK_ENTITY =
             BLOCK_ENTITY_TYPES.register("generator", () -> BlockEntityType.Builder.of(
@@ -58,8 +63,10 @@ public final class ModRegistry {
             () -> CreativeModeTab.builder()
                     .title(Component.translatable("itemGroup.pi_generator"))
                     .icon(() -> new ItemStack(GENERATOR_ITEMS.get(GeneratorTier.TIER_8).get()))
-                    .displayItems((parameters, output) ->
-                            GENERATOR_ITEMS.values().forEach(item -> output.accept(item.get())))
+                    .displayItems((parameters, output) -> {
+                        GENERATOR_ITEMS.values().forEach(item -> output.accept(item.get()));
+                        output.accept(RESOURCE_FILTER.get());
+                    })
                     .build());
 
     public static void register(IEventBus modBus) {
