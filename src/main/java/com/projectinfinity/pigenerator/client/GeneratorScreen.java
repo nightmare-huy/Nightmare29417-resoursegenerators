@@ -44,12 +44,11 @@ public class GeneratorScreen extends AbstractContainerScreen<GeneratorMenu> {
         imageWidth = 176;
         imageHeight = 222;
         inventoryLabelY = GeneratorMenu.INVENTORY_Y - 12;
-        texture = new ResourceLocation(PiGenerator.MODID, "textures/gui/generator_tier_" + menu.getTier().getLevel() + ".png");
+        texture = ResourceLocation.fromNamespaceAndPath(PiGenerator.MODID, "textures/gui/generator_tier_" + menu.getTier().getLevel() + ".png");
     }
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        renderBackground(graphics);
         super.render(graphics, mouseX, mouseY, partialTick);
         renderTooltip(graphics, mouseX, mouseY);
     }

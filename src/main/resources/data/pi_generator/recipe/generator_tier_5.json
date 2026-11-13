@@ -1,0 +1,40 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "ae2"
+    },
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "mekanism"
+    }
+  ],
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "G": {
+      "item": "pi_generator:generator_tier_4"
+    },
+    "C": {
+      "item": "mekanism:ultimate_control_circuit"
+    },
+    "P": {
+      "item": "mekanism:pellet_polonium"
+    },
+    "S": {
+      "item": "ae2:singularity"
+    },
+    "Q": {
+      "item": "ae2:quantum_ring"
+    }
+  },
+  "pattern": [
+    "PCP",
+    "QGQ",
+    "PSP"
+  ],
+  "result": {
+    "count": 1,
+    "id": "pi_generator:generator_tier_5"
+  }
+}

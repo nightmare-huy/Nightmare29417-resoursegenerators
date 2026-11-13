@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "item": "pi_generator:resource_filter"
+    }
+  ],
+  "result": {
+    "count": 1,
+    "id": "pi_generator:resource_filter"
+  }
+}

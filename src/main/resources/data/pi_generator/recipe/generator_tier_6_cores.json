@@ -1,0 +1,26 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "pi_generator:core_recipes"
+    }
+  ],
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "G": {
+      "item": "pi_generator:generator_tier_5"
+    },
+    "K": {
+      "item": "pi_generator:crystal_core"
+    }
+  },
+  "pattern": [
+    "KKK",
+    "KGK",
+    "KKK"
+  ],
+  "result": {
+    "count": 1,
+    "id": "pi_generator:generator_tier_6"
+  }
+}

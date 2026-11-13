@@ -1,0 +1,47 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "pi_generator:recipe_serializer_exists",
+      "serializer": "avaritia:shaped_table"
+    },
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "ae2"
+    },
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "mekanism"
+    }
+  ],
+  "type": "avaritia:shaped_table",
+  "key": {
+    "G": {
+      "item": "pi_generator:generator_tier_5"
+    },
+    "P": {
+      "item": "mekanism:pellet_plutonium"
+    },
+    "C": {
+      "item": "avaritia:crystal_matrix_ingot"
+    },
+    "K": {
+      "item": "ae2:cell_component_256k"
+    }
+  },
+  "pattern": [
+    "CCCPPPCCC",
+    "CKPPCPPKC",
+    "CPCCCCCPC",
+    "PPCKPKCPP",
+    "PCCPGPCCP",
+    "PPCKPKCPP",
+    "CPCCCCCPC",
+    "CKPPCPPKC",
+    "CCCPPPCCC"
+  ],
+  "result": {
+    "count": 1,
+    "id": "pi_generator:generator_tier_6"
+  },
+  "tier": 4
+}

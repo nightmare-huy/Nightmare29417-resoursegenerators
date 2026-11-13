@@ -1,7 +1,7 @@
 package com.projectinfinity.pigenerator;
 
 import net.minecraft.resources.ResourceLocation;
-import net.minecraftforge.common.ForgeConfigSpec;
+import net.neoforged.neoforge.common.ModConfigSpec;
 
 import java.util.HashMap;
 import java.util.List;
@@ -9,9 +9,14 @@ import java.util.Map;
 
 /** Common config ({@code config/pi_generator-common.toml}). */
 public final class PiConfig {
-    public static final ForgeConfigSpec SPEC;
-    public static final ForgeConfigSpec.BooleanValue FORCE_FALLBACK_RECIPES;
-    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> OUTPUT_WEIGHTS;
+    public static final ModConfigSpec SPEC;
+    public static final ModConfigSpec.EnumValue<CoreRecipes> CORE_RECIPES;
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> OUTPUT_WEIGHTS;
+
+    /** When the recipes of the tier 6-8 generators that need no Avaritia are enabled. */
+    public enum CoreRecipes {
+        ALWAYS, WITHOUT_AVARITIA, NEVER
+    }
 
     /** The largest weight that can be given to an item. */
     public static final int MAX_WEIGHT = 1000;
@@ -20,16 +25,21 @@ public final class PiConfig {
     private static volatile Map<ResourceLocation, Integer> outputWeights;
 
     static {
-        ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
+        ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
         builder.push("recipes");
-        FORCE_FALLBACK_RECIPES = builder
-                .comment("Tier 6-8 generators are normally crafted in the Avaritia 9x9 extreme crafting table",
-                        "(recipe type 'avaritia:shaped_table'). When that recipe type is not registered, the 3x3",
-                        "crafting table fallback recipes are enabled automatically.",
-                        "Set this to true to always enable the 3x3 fallback recipes as well, e.g. if your Avaritia",
-                        "version uses a different JSON format and the 9x9 recipes fail to load.",
+        CORE_RECIPES = builder
+                .comment("Tier 6-8 generators have two kinds of recipes:",
+                        " - in the Avaritia 9x9 extreme crafting table (recipe type 'avaritia:shaped_table'), loaded",
+                        "   only when Avaritia is installed;",
+                        " - in the normal crafting table, without anything from Avaritia: eight cores (crystal /",
+                        "   neutron / infinity core) around the generator of the tier below. More expensive.",
+                        "This option decides when the recipes without Avaritia (the cores and the generators made",
+                        "from them) are enabled:",
+                        "  ALWAYS            - always, next to the Avaritia recipes if Avaritia is installed",
+                        "  WITHOUT_AVARITIA  - only when Avaritia is not installed",
+                        "  NEVER             - never: tier 6-8 can be crafted with Avaritia only",
                         "Restart the game / server after changing.")
-                .define("forceFallbackRecipes", false);
+                .defineEnum("coreRecipes", CoreRecipes.ALWAYS);
         builder.pop();
         builder.push("outputs");
         OUTPUT_WEIGHTS = builder
@@ -42,17 +52,17 @@ public final class PiConfig {
                         "Weights are whole numbers from 0 to " + MAX_WEIGHT + "; 0 means that the item is never made.",
                         "A weight applies to the item in every generator tier that makes it.",
                         "Restart the game / server after changing.")
-                .defineListAllowEmpty(List.of("weights"), List::of, entry -> entry instanceof String);
+                .defineListAllowEmpty("weights", List.of(), () -> "minecraft:diamond=10", entry -> entry instanceof String);
         builder.pop();
         SPEC = builder.build();
     }
 
-    /** Safe accessor: returns {@code false} when the config has not been loaded yet. */
-    public static boolean forceFallbackRecipes() {
+    /** Safe accessor: returns the default while the config has not been loaded yet. */
+    public static CoreRecipes coreRecipes() {
         try {
-            return FORCE_FALLBACK_RECIPES.get();
+            return CORE_RECIPES.get();
         } catch (IllegalStateException notLoadedYet) {
-            return false;
+            return CoreRecipes.ALWAYS;
         }
     }
 

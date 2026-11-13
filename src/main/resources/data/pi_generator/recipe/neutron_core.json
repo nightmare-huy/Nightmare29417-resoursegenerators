@@ -1,0 +1,40 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "pi_generator:core_recipes"
+    },
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "ae2"
+    },
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "mekanism"
+    }
+  ],
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "X": {
+      "item": "pi_generator:crystal_core"
+    },
+    "A": {
+      "item": "mekanism:pellet_antimatter"
+    },
+    "C": {
+      "item": "mekanism:sps_casing"
+    },
+    "S": {
+      "item": "ae2:singularity"
+    }
+  },
+  "pattern": [
+    "ACA",
+    "SXS",
+    "ACA"
+  ],
+  "result": {
+    "count": 1,
+    "id": "pi_generator:neutron_core"
+  }
+}

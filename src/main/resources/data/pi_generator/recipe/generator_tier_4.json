@@ -1,0 +1,43 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "ae2"
+    },
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "mekanism"
+    }
+  ],
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "G": {
+      "item": "pi_generator:generator_tier_3"
+    },
+    "N": {
+      "item": "minecraft:netherite_ingot"
+    },
+    "K": {
+      "item": "ae2:cell_component_64k"
+    },
+    "A": {
+      "item": "mekanism:alloy_atomic"
+    },
+    "C": {
+      "item": "mekanism:elite_control_circuit"
+    },
+    "I": {
+      "item": "ae2:interface"
+    }
+  },
+  "pattern": [
+    "NCN",
+    "AGA",
+    "KIK"
+  ],
+  "result": {
+    "count": 1,
+    "id": "pi_generator:generator_tier_4"
+  }
+}

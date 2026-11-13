@@ -11,6 +11,7 @@ import com.projectinfinity.pigenerator.item.UpgradeItem;
 import com.projectinfinity.pigenerator.upgrade.UpgradeType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.Containers;
 import net.minecraft.world.item.Item;
@@ -18,14 +19,11 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraftforge.common.capabilities.Capability;
-import net.minecraftforge.common.capabilities.ForgeCapabilities;
-import net.minecraftforge.common.util.LazyOptional;
-import net.minecraftforge.energy.IEnergyStorage;
-import net.minecraftforge.items.IItemHandler;
-import net.minecraftforge.items.ItemHandlerHelper;
-import net.minecraftforge.items.ItemStackHandler;
-import org.jetbrains.annotations.NotNull;
+import net.neoforged.neoforge.capabilities.Capabilities;
+import net.neoforged.neoforge.energy.IEnergyStorage;
+import net.neoforged.neoforge.items.IItemHandler;
+import net.neoforged.neoforge.items.ItemHandlerHelper;
+import net.neoforged.neoforge.items.ItemStackHandler;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -35,7 +33,7 @@ import java.util.List;
  * Block entity shared by all generator tiers.
  *
  * <ul>
- *   <li>Forge Energy input on every side (and for the {@code null} side) without a transfer limit.</li>
+ *   <li>FE (Forge Energy) input on every side (and for the {@code null} side) without a transfer limit.</li>
  *   <li>Every operation makes one of the tier's outputs, picked at random by the weights of the outputs
  *       (see {@link GeneratorTier#getWeight}): valuable items come less often than cheap ones.</li>
  *   <li>27 slot output buffer exposed as an (extract only) item handler on every side.</li>
@@ -69,9 +67,6 @@ public class GeneratorBlockEntity extends BlockEntity {
         }
     };
     private final IItemHandler outputView = new OutputOnlyItemHandler(inventory);
-
-    private LazyOptional<IEnergyStorage> energyCapability;
-    private LazyOptional<IItemHandler> itemCapability;
 
     private int progress;
     /**
@@ -112,11 +107,20 @@ public class GeneratorBlockEntity extends BlockEntity {
         this.tier = state.getBlock() instanceof GeneratorBlock block ? block.getTier() : GeneratorTier.TIER_1;
         this.energy = new GeneratorEnergyStorage(tier.getCapacity(), this::markDirty);
         applyUpgrades();
-        createCapabilities();
     }
 
     public GeneratorTier getTier() {
         return tier;
+    }
+
+    /** The FE input, offered to other blocks on every side, see {@code ModRegistry#registerCapabilities}. */
+    public IEnergyStorage getEnergyStorage() {
+        return energy;
+    }
+
+    /** The take-only view of the output buffer that other blocks get on every side. */
+    public IItemHandler getOutputView() {
+        return outputView;
     }
 
     public int getEnergyStored() {
@@ -384,10 +388,14 @@ public class GeneratorBlockEntity extends BlockEntity {
                 continue; // never force-load a chunk
             }
             BlockEntity neighbour = level.getBlockEntity(neighbourPos);
-            if (neighbour == null || neighbour instanceof GeneratorBlockEntity) {
-                continue;
+            if (neighbour instanceof GeneratorBlockEntity) {
+                continue; // generators do not feed each other
             }
-            neighbour.getCapability(ForgeCapabilities.ITEM_HANDLER, direction.getOpposite()).ifPresent(handlers::add);
+            IItemHandler handler = level.getCapability(Capabilities.ItemHandler.BLOCK, neighbourPos,
+                    level.getBlockState(neighbourPos), neighbour, direction.getOpposite());
+            if (handler != null) {
+                handlers.add(handler);
+            }
         }
         return handlers;
     }
@@ -439,40 +447,6 @@ public class GeneratorBlockEntity extends BlockEntity {
         }
     }
 
-    // ------------------------------------------------------------------ capabilities
-
-    private void createCapabilities() {
-        energyCapability = LazyOptional.of(() -> energy);
-        itemCapability = LazyOptional.of(() -> outputView);
-    }
-
-    /** Energy and items are available on all six sides and for the {@code null} (internal) side. */
-    @Override
-    public @NotNull <T> LazyOptional<T> getCapability(@NotNull Capability<T> capability, @Nullable Direction side) {
-        if (!remove) {
-            if (capability == ForgeCapabilities.ENERGY) {
-                return energyCapability.cast();
-            }
-            if (capability == ForgeCapabilities.ITEM_HANDLER) {
-                return itemCapability.cast();
-            }
-        }
-        return super.getCapability(capability, side);
-    }
-
-    @Override
-    public void invalidateCaps() {
-        super.invalidateCaps();
-        energyCapability.invalidate();
-        itemCapability.invalidate();
-    }
-
-    @Override
-    public void reviveCaps() {
-        super.reviveCaps();
-        createCapabilities();
-    }
-
     // ------------------------------------------------------------------ persistence
 
     /** Marks the chunk as needing a save, without the neighbour updates of {@link #setChanged()}. */
@@ -483,19 +457,19 @@ public class GeneratorBlockEntity extends BlockEntity {
     }
 
     @Override
-    protected void saveAdditional(CompoundTag tag) {
-        super.saveAdditional(tag);
+    protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+        super.saveAdditional(tag, registries);
         tag.putInt(TAG_ENERGY, energy.getEnergyStored());
         tag.putInt(TAG_PROGRESS, progress);
         tag.putInt(TAG_OUTPUT_INDEX, outputIndex);
-        tag.put(TAG_INVENTORY, inventory.serializeNBT());
+        tag.put(TAG_INVENTORY, inventory.serializeNBT(registries));
         if (hasFilter()) {
-            tag.put(TAG_FILTER, getFilter().save(new CompoundTag()));
+            tag.put(TAG_FILTER, getFilter().save(registries));
         }
         CompoundTag upgradesTag = new CompoundTag();
         for (UpgradeType type : UpgradeType.values()) {
             if (!getUpgrade(type).isEmpty()) {
-                upgradesTag.put(type.getName(), getUpgrade(type).save(new CompoundTag()));
+                upgradesTag.put(type.getName(), getUpgrade(type).save(registries));
             }
         }
         if (!upgradesTag.isEmpty()) {
@@ -504,24 +478,24 @@ public class GeneratorBlockEntity extends BlockEntity {
     }
 
     @Override
-    public void load(CompoundTag tag) {
-        super.load(tag);
+    protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+        super.loadAdditional(tag, registries);
         energy.setEnergy(tag.getInt(TAG_ENERGY));
         progress = Math.max(0, tag.getInt(TAG_PROGRESS));
         outputIndex = tag.contains(TAG_OUTPUT_INDEX) ? tag.getInt(TAG_OUTPUT_INDEX) : NOT_PICKED;
         if (tag.contains(TAG_INVENTORY)) {
             CompoundTag inventoryTag = tag.getCompound(TAG_INVENTORY).copy();
             inventoryTag.putInt("Size", SLOTS); // the buffer size is fixed, ignore whatever was saved
-            inventory.deserializeNBT(inventoryTag);
+            inventory.deserializeNBT(registries, inventoryTag);
         }
-        // The saved layout ({Filter: {...}, Upgrades: {speed: {...}, ...}}) is older than the slots: keep it.
+        // Layout: {Filter: {...}, Upgrades: {speed: {...}, ...}}, one item stack each.
         // Written straight into the handler's list so that loading does not mark the chunk as changed.
         installed.load(InstalledItemsHandler.FILTER_SLOT,
-                tag.contains(TAG_FILTER) ? ItemStack.of(tag.getCompound(TAG_FILTER)) : ItemStack.EMPTY);
+                tag.contains(TAG_FILTER) ? ItemStack.parseOptional(registries, tag.getCompound(TAG_FILTER)) : ItemStack.EMPTY);
         CompoundTag upgradesTag = tag.getCompound(TAG_UPGRADES);
         for (UpgradeType type : UpgradeType.values()) {
             installed.load(InstalledItemsHandler.upgradeSlot(type), upgradesTag.contains(type.getName())
-                    ? ItemStack.of(upgradesTag.getCompound(type.getName())) : ItemStack.EMPTY);
+                    ? ItemStack.parseOptional(registries, upgradesTag.getCompound(type.getName())) : ItemStack.EMPTY);
         }
         activeOutputs = null;
         applyUpgrades();

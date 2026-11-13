@@ -21,7 +21,7 @@ import java.util.List;
  * {@code scripts/generate_resources.py}.</p>
  */
 public class FilterScreen extends AbstractContainerScreen<FilterMenu> {
-    private static final ResourceLocation TEXTURE = new ResourceLocation(PiGenerator.MODID, "textures/gui/resource_filter.png");
+    private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath(PiGenerator.MODID, "textures/gui/resource_filter.png");
     private static final int BUTTON_X = 8, BUTTON_Y = 58, BUTTON_WIDTH = 160, BUTTON_HEIGHT = 20;
     /** Button sprites below the window: except, except (hovered), only, only (hovered). */
     private static final int BUTTON_V = 174;
@@ -74,7 +74,6 @@ public class FilterScreen extends AbstractContainerScreen<FilterMenu> {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        renderBackground(graphics);
         super.render(graphics, mouseX, mouseY, partialTick);
         renderTooltip(graphics, mouseX, mouseY);
     }

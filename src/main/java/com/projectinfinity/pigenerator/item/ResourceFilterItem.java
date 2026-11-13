@@ -1,11 +1,9 @@
 package com.projectinfinity.pigenerator.item;
 
+import com.projectinfinity.pigenerator.ModRegistry;
 import com.projectinfinity.pigenerator.menu.FilterMenu;
 import net.minecraft.ChatFormatting;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.StringTag;
-import net.minecraft.nbt.Tag;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
@@ -20,9 +18,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
-import net.minecraftforge.network.NetworkHooks;
-import net.minecraftforge.registries.ForgeRegistries;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -33,14 +28,13 @@ import java.util.List;
  * <p>Holds a list of items and a mode: <em>except</em> (default, the listed items are not generated) or
  * <em>only</em> (nothing but the listed items is generated). Right clicking with the filter in the main
  * hand opens its screen ({@link FilterMenu}); right clicking a generator installs it
- * (see {@code GeneratorBlock#use}), as does putting it into the filter slot of the generator screen.</p>
+ * (see {@code GeneratorBlock#useItemOn}), as does putting it into the filter slot of the generator screen.</p>
  *
- * <p>NBT: {@code {Whitelist: 1b, Items: ["minecraft:coal", ...]}}. Crafting the filter by itself clears it.</p>
+ * <p>The mode and the list are kept in the data component {@code pi_generator:filter}, see {@link FilterData}.
+ * Crafting the filter by itself clears it.</p>
  */
 public class ResourceFilterItem extends Item {
     public static final int MAX_ENTRIES = 18;
-    private static final String TAG_WHITELIST = "Whitelist";
-    private static final String TAG_ITEMS = "Items";
 
     public ResourceFilterItem() {
         super(new Item.Properties().stacksTo(1));
@@ -48,42 +42,37 @@ public class ResourceFilterItem extends Item {
 
     // ------------------------------------------------------------------ filter data
 
+    /** The data of the filter stack; {@link FilterData#EMPTY} for a new filter. */
+    public static FilterData getData(ItemStack filter) {
+        return filter.getOrDefault(ModRegistry.FILTER_DATA, FilterData.EMPTY);
+    }
+
     /** {@code true}: only the listed items are generated, {@code false}: everything except them. */
     public static boolean isWhitelist(ItemStack filter) {
-        CompoundTag tag = filter.getTag();
-        return tag != null && tag.getBoolean(TAG_WHITELIST);
+        return getData(filter).whitelist();
     }
 
     public static void setWhitelist(ItemStack filter, boolean whitelist) {
-        filter.getOrCreateTag().putBoolean(TAG_WHITELIST, whitelist);
+        filter.set(ModRegistry.FILTER_DATA, getData(filter).withWhitelist(whitelist));
     }
 
     /** Registry ids of the listed items, in the order they were added. */
     public static List<ResourceLocation> getEntries(ItemStack filter) {
-        List<ResourceLocation> entries = new ArrayList<>();
-        CompoundTag tag = filter.getTag();
-        if (tag != null) {
-            ListTag list = tag.getList(TAG_ITEMS, Tag.TAG_STRING);
-            for (int i = 0; i < list.size(); i++) {
-                ResourceLocation id = ResourceLocation.tryParse(list.getString(i));
-                if (id != null && !entries.contains(id)) {
-                    entries.add(id);
-                }
-            }
-        }
-        return entries;
+        return getData(filter).items();
     }
 
-    /** Replaces the list of items; at most {@link #MAX_ENTRIES} are kept. */
+    /** Replaces the list of items; duplicates are dropped and at most {@link #MAX_ENTRIES} are kept. */
     public static void setEntries(ItemStack filter, List<ResourceLocation> entries) {
-        ListTag list = new ListTag();
+        List<ResourceLocation> list = new ArrayList<>();
         for (ResourceLocation id : entries) {
             if (list.size() >= MAX_ENTRIES) {
                 break;
             }
-            list.add(StringTag.valueOf(id.toString()));
+            if (!list.contains(id)) {
+                list.add(id);
+            }
         }
-        filter.getOrCreateTag().put(TAG_ITEMS, list);
+        filter.set(ModRegistry.FILTER_DATA, getData(filter).withItems(list));
     }
 
     /** Whether a generator holding this filter may produce the item. An empty stack allows everything. */
@@ -91,7 +80,7 @@ public class ResourceFilterItem extends Item {
         if (filter.isEmpty()) {
             return true;
         }
-        boolean listed = getEntries(filter).contains(ForgeRegistries.ITEMS.getKey(item));
+        boolean listed = getEntries(filter).contains(BuiltInRegistries.ITEM.getKey(item));
         return isWhitelist(filter) == listed;
     }
 
@@ -121,7 +110,7 @@ public class ResourceFilterItem extends Item {
     private static void openScreen(Player player, ItemStack filter) {
         if (player instanceof ServerPlayer serverPlayer) {
             int slot = player.getInventory().selected; // the main hand
-            NetworkHooks.openScreen(serverPlayer,
+            serverPlayer.openMenu(
                     new SimpleMenuProvider((id, inventory, p) -> new FilterMenu(id, inventory, slot), filter.getHoverName()),
                     buffer -> buffer.writeVarInt(slot));
         }
@@ -141,7 +130,7 @@ public class ResourceFilterItem extends Item {
     }
 
     @Override
-    public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
+    public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
         boolean whitelist = isWhitelist(stack);
         tooltip.add(Component.translatable("tooltip.pi_generator.filter.mode", modeName(whitelist)).withStyle(ChatFormatting.GRAY));
         List<ResourceLocation> entries = getEntries(stack);
@@ -150,7 +139,7 @@ public class ResourceFilterItem extends Item {
                     : "tooltip.pi_generator.filter.empty_except").withStyle(ChatFormatting.DARK_GRAY));
         }
         for (ResourceLocation id : entries) {
-            Item item = ForgeRegistries.ITEMS.containsKey(id) ? ForgeRegistries.ITEMS.getValue(id) : null;
+            Item item = BuiltInRegistries.ITEM.containsKey(id) ? BuiltInRegistries.ITEM.get(id) : null;
             Component name = item != null ? item.getDescription() : Component.literal(id.toString());
             tooltip.add(Component.literal(" - ").append(name).withStyle(item != null ? ChatFormatting.WHITE : ChatFormatting.DARK_GRAY));
         }

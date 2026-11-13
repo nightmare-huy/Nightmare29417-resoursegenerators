@@ -1,12 +1,12 @@
 package com.projectinfinity.pigenerator.energy;
 
-import net.minecraftforge.energy.IEnergyStorage;
+import net.neoforged.neoforge.energy.IEnergyStorage;
 
 /**
- * Receive-only Forge Energy buffer of a generator.
+ * Receive-only FE (Forge Energy) buffer of a generator.
  *
  * <p>There is deliberately no transfer limit: a single {@link #receiveEnergy} call may fill the whole
- * buffer, so Flux Networks points, Mekanism cables, Thermal ducts, AE2 P2P tunnels etc. are never
+ * buffer, so Flux Networks points, Mekanism cables, AE2 P2P tunnels etc. are never
  * throttled by the block. Energy can not be pulled back out through the capability.</p>
  */
 public class GeneratorEnergyStorage implements IEnergyStorage {

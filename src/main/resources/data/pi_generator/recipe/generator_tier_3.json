@@ -1,0 +1,40 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "ae2"
+    },
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "mekanism"
+    }
+  ],
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "G": {
+      "item": "pi_generator:generator_tier_2"
+    },
+    "F": {
+      "item": "ae2:fluix_block"
+    },
+    "P": {
+      "item": "ae2:engineering_processor"
+    },
+    "O": {
+      "item": "mekanism:ingot_refined_obsidian"
+    },
+    "A": {
+      "item": "mekanism:alloy_reinforced"
+    }
+  },
+  "pattern": [
+    "OPO",
+    "AGA",
+    "OFO"
+  ],
+  "result": {
+    "count": 1,
+    "id": "pi_generator:generator_tier_3"
+  }
+}

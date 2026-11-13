@@ -1,11 +1,10 @@
 package com.projectinfinity.pigenerator;
 
 import net.minecraft.ChatFormatting;
-import net.minecraft.ResourceLocationException;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Rarity;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.core.registries.BuiltInRegistries;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -16,10 +15,11 @@ import java.util.Map;
 /**
  * Parameters of the eight generator stages.
  *
- * <p>Outputs are plain registry ids, resolved lazily through {@link ForgeRegistries#ITEMS} so that no
+ * <p>Outputs are plain registry ids, resolved lazily through {@link BuiltInRegistries#ITEM} so that no
  * other mod is needed at compile time. Ids of mods that are not installed are silently skipped.
- * An entry may list several alternatives separated by {@code |}: the first id that exists is used
- * (covers ports of a mod that name the same item differently).</p>
+ * An entry may list several alternatives separated by {@code |}: the first id that exists is used. This
+ * way a material that several mods add (tin, lead, silver ...) is made once, as the item of the first
+ * listed mod that is installed, and ports that name the same item differently are covered as well.</p>
  *
  * <p>Every entry ends with {@code =weight}. A generator picks what to make at random and the chance of an
  * item is its weight divided by the sum of the weights of everything it could make, so the valuable items
@@ -32,25 +32,46 @@ public enum GeneratorTier {
             "minecraft:coal=10", "minecraft:raw_iron=10", "minecraft:raw_copper=10", "minecraft:raw_gold=6",
             "minecraft:redstone=8", "minecraft:lapis_lazuli=8", "minecraft:diamond=2", "minecraft:emerald=2",
             "minecraft:quartz=8",
-            // modded base ores
-            "thermal:apatite=8", "mekanism:raw_osmium=8", "thermal:raw_tin=10", "thermal:raw_lead=8",
-            "thermal:raw_silver=6", "thermal:raw_nickel=6"),
+            // common modded ores: one entry per material, taken from the first of the listed mods that is installed
+            "mekanism:raw_osmium|alltheores:raw_osmium=8",
+            "mekanism:raw_tin|alltheores:raw_tin=10",
+            "mekanism:raw_lead|alltheores:raw_lead|immersiveengineering:raw_lead=8",
+            "alltheores:raw_silver|immersiveengineering:raw_silver|occultism:raw_silver=6",
+            "alltheores:raw_nickel|immersiveengineering:raw_nickel=6",
+            "alltheores:raw_aluminum|immersiveengineering:raw_aluminum=8",
+            "create:raw_zinc|alltheores:raw_zinc=8",
+            "mekanism:fluorite_gem|alltheores:fluorite=6",
+            "alltheores:cinnabar=5", "alltheores:sulfur|mekanism:dust_sulfur=6",
+            "actuallyadditions:black_quartz=6",
+            "mysticalagriculture:inferium_essence=8", "mysticalagriculture:prosperity_shard=5",
+            "alltheores:ruby=3", "alltheores:sapphire=3", "alltheores:peridot=3"),
 
     TIER_2(2, 1_024, 500_000, 35, false, Inherit.PREVIOUS, Rarity.COMMON, ChatFormatting.GREEN,
-            "mekanism:ingot_steel=4", "thermal:invar_ingot=4", "thermal:electrum_ingot=3",
-            "ae2:certus_quartz_crystal=8"),
+            "mekanism:ingot_steel=4", "mekanism:ingot_bronze=4",
+            "ae2:certus_quartz_crystal=8",
+            // radioactive and Nether / End ores
+            "powah:uraninite_raw=6", "bigreactors:raw_yellorium=6",
+            "silentgear:raw_crimson_iron=5", "silentgear:raw_azure_silver=4",
+            "evilcraft:dark_gem=5", "forbidden_arcanus:arcane_crystal=5", "ars_nouveau:source_gem=6"),
 
     TIER_3(3, 8_192, 2_000_000, 30, false, Inherit.NONE, Rarity.UNCOMMON, ChatFormatting.AQUA,
-            "ae2:fluix_crystal=10", "thermal:signalum_ingot=5", "thermal:lumium_ingot=5",
-            "mekanism:alloy_infused=8", "mekanism:ingot_refined_obsidian=3"),
+            "ae2:fluix_crystal=10", "mekanism:ingot_refined_glowstone=5",
+            "mekanism:alloy_infused=8", "mekanism:ingot_refined_obsidian=3",
+            // rare ores
+            "alltheores:raw_platinum=4", "alltheores:raw_iridium=3", "occultism:raw_iesnium=4",
+            "ad_astra:raw_desh=5"),
 
     TIER_4(4, 65_536, 10_000_000, 20, false, Inherit.NONE, Rarity.UNCOMMON, ChatFormatting.BLUE,
-            "thermal:enderium_ingot=3", "mekanism:alloy_reinforced=6", "ae2:calculation_processor=8",
-            "ae2:engineering_processor=8", "ae2:logic_processor=8", "mekanism:raw_uranium=6"),
+            "mekanism:alloy_reinforced=6", "ae2:calculation_processor=8",
+            "ae2:engineering_processor=8", "ae2:logic_processor=8",
+            "mekanism:raw_uranium|alltheores:raw_uranium|immersiveengineering:raw_uranium=6",
+            "draconicevolution:draconium_dust=4", "ad_astra:raw_ostrum=4", "ad_astra:raw_calorite=3",
+            "allthemodium:raw_allthemodium=2"),
 
     TIER_5(5, 524_288, 50_000_000, 15, false, Inherit.NONE, Rarity.RARE, ChatFormatting.YELLOW,
             "mekanism:alloy_atomic=8", "mekanism:ultimate_control_circuit=5", "ae2:singularity=3",
-            "minecraft:nether_star=1"),
+            "minecraft:nether_star=1",
+            "allthemodium:raw_vibranium=2", "allthemodium:raw_unobtainium=1"),
 
     TIER_6(6, 4_194_304, 500_000_000, 10, false, Inherit.NONE, Rarity.RARE, ChatFormatting.GOLD,
             "mekanism:pellet_polonium=6", "mekanism:pellet_plutonium=6", "avaritia:crystal_matrix_ingot=2"),
@@ -60,7 +81,7 @@ public enum GeneratorTier {
 
     TIER_8(8, 1_000_000_000, Integer.MAX_VALUE, 1, true, Inherit.ALL_PREVIOUS, Rarity.EPIC, ChatFormatting.LIGHT_PURPLE,
             // Re-Avaritia registers the neutronium ingot as "avaritia:neutron_ingot"
-            "avaritia:neutronium_ingot|avaritia:neutron_ingot=2", "avaritia:infinity_catalyst=1",
+            "avaritia:neutron_ingot|avaritia:neutronium_ingot=2", "avaritia:infinity_catalyst=1",
             "mekanism:pellet_antimatter=2");
 
     /** Which lower tiers contribute their outputs to this tier. */
@@ -212,7 +233,7 @@ public enum GeneratorTier {
                 missing.add(entry.getKey());
                 continue;
             }
-            Integer override = configured.get(ForgeRegistries.ITEMS.getKey(item));
+            Integer override = configured.get(BuiltInRegistries.ITEM.getKey(item));
             int weight = override != null ? override : entry.getValue();
             if (weight > 0) {
                 weights.put(item, weight);
@@ -230,14 +251,12 @@ public enum GeneratorTier {
     /** Returns the first registered item among the {@code |}-separated alternatives, or {@code null}. */
     private static Item resolve(String entry) {
         for (String id : entry.split("\\|")) {
-            try {
-                // Resource locations must be lower case, be lenient about ids such as "mekanism:Raw_osmium".
-                ResourceLocation key = new ResourceLocation(id.trim().toLowerCase(Locale.ROOT));
-                if (ForgeRegistries.ITEMS.containsKey(key)) {
-                    return ForgeRegistries.ITEMS.getValue(key);
-                }
-            } catch (ResourceLocationException invalidId) {
+            // Resource locations must be lower case, be lenient about ids such as "mekanism:Raw_osmium".
+            ResourceLocation key = ResourceLocation.tryParse(id.trim().toLowerCase(Locale.ROOT));
+            if (key == null) {
                 PiGenerator.LOGGER.warn("Invalid item id '{}' in generator output list", id);
+            } else if (BuiltInRegistries.ITEM.containsKey(key)) {
+                return BuiltInRegistries.ITEM.get(key);
             }
         }
         return null;

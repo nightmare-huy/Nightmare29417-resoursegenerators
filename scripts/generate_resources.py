@@ -11,9 +11,12 @@ Writes into src/main/resources:
   * assets/pi_generator/{textures/item,models/item}/{speed,efficiency,energy}_upgrade_N.*
   * assets/pi_generator/textures/gui/{generator_tier_N,resource_filter}.png   (screen backgrounds, 256x256 sheets)
   * pi_generator_logo.png   (mods list logo)
-  * data/pi_generator/loot_tables/blocks/generator_tier_N.json
-  * data/pi_generator/recipes/*.json
-  * data/minecraft/tags/blocks/{mineable/pickaxe,needs_iron_tool}.json
+  * assets/pi_generator/{textures/item,models/item}/{crystal,neutron,infinity}_core.*
+  * data/pi_generator/loot_table/blocks/generator_tier_N.json
+  * data/pi_generator/recipe/*.json   (the folder is emptied first)
+  * data/minecraft/tags/block/{mineable/pickaxe,needs_iron_tool}.json
+
+Folder names and the recipe format are those of Minecraft 1.21.1 / NeoForge.
 
 The language files (assets/pi_generator/lang/*.json) are maintained by hand.
 """
@@ -22,6 +25,7 @@ import json
 import math
 import os
 import random
+import shutil
 import struct
 import zlib
 
@@ -386,6 +390,48 @@ def generate_upgrade_items():
                        {"parent": "minecraft:item/generated", "textures": {"layer0": f"{MODID}:item/{name}"}})
 
 
+# Cores (crafting components of the tier 6-8 generators without Avaritia): a glowing sphere held by four
+# corner brackets. Sphere colour (None = shimmering like the tier 8 generator) and bracket colour.
+CORES = {
+    "crystal_core": ((0x58, 0xE0, 0xEC), ACCENTS[6]),
+    "neutron_core": ((0x8E, 0x94, 0x9E), ACCENTS[7]),
+    "infinity_core": (None, ACCENTS[8]),
+}
+CORE_OUTLINE = (0x1E, 0x20, 0x26)
+
+
+def core_texture(name, frame=0):
+    """A pulse runs from the centre of the sphere to its rim."""
+    colour, bracket = CORES[name]
+    rows = []
+    for y in range(SIZE):
+        row = []
+        for x in range(SIZE):
+            dx, dy = x - 7.5, y - 7.5
+            distance = math.hypot(dx, dy)
+            px = None
+            if distance <= 5.3:
+                base = colour or shimmer((frame / ITEM_FRAMES + (x + y) / 24.0) % 1.0)
+                light = max(0.0, 1.0 - math.hypot(dx + 2.0, dy + 2.0) / 7.5)          # lit from the top left
+                pulse = 0.5 + 0.5 * math.cos(2 * math.pi * (frame / ITEM_FRAMES - distance / 6.0))
+                px = mix(mul(base, 0.50 + 0.55 * light), WHITE, 0.45 * pulse * (0.35 + 0.65 * light))
+            elif distance <= 6.4:
+                px = CORE_OUTLINE
+            near_x, near_y = min(x, SIZE - 1 - x), min(y, SIZE - 1 - y)
+            if px is None and ((near_y == 0 and near_x <= 3) or (near_x == 0 and near_y <= 3)):
+                px = mul(bracket, 1.0 if (x == 0 or y == 0) else 0.65)                # lit top/left, shaded bottom/right
+            row.append(px + (255,) if px else (0, 0, 0, 0))
+        rows.append(row)
+    return rows
+
+
+def generate_core_items():
+    for name in CORES:
+        write_item_texture(name, lambda frame, name=name: core_texture(name, frame))
+        write_json(os.path.join(ASSETS, "models", "item", name + ".json"),
+                   {"parent": "minecraft:item/generated", "textures": {"layer0": f"{MODID}:item/{name}"}})
+
+
 # --------------------------------------------------------------------------- screens (GUI backgrounds)
 
 # The two screens use 256x256 sheets in the vanilla container style. The numbers below must match the slot
@@ -618,7 +664,7 @@ def generate_models():
 def generate_loot_and_tags():
     for tier in TIERS:
         name = f"generator_tier_{tier}"
-        write_json(os.path.join(DATA, "loot_tables", "blocks", name + ".json"), {
+        write_json(os.path.join(DATA, "loot_table", "blocks", name + ".json"), {
             "type": "minecraft:block",
             "pools": [{
                 "rolls": 1.0,
@@ -629,88 +675,102 @@ def generate_loot_and_tags():
             "random_sequence": f"{MODID}:blocks/{name}",
         })
     values = [gen(t) for t in TIERS]
-    tags = os.path.join(ROOT, "data", "minecraft", "tags", "blocks")
+    tags = os.path.join(ROOT, "data", "minecraft", "tags", "block")
     write_json(os.path.join(tags, "mineable", "pickaxe.json"), {"replace": False, "values": values})
     write_json(os.path.join(tags, "needs_iron_tool.json"), {"replace": False, "values": values})
 
 
 # --------------------------------------------------------------------------- recipes
+#
+# Minecraft 1.21.1 format: results are {"id": ..., "count": ...}; a recipe file may start with a
+# "neoforge:conditions" list and is skipped without an error when one of the conditions fails.
+# Every recipe is only loaded when the mods its ingredients come from are installed.
+
+RECIPES = os.path.join(DATA, "recipe")
+
 
 def item(item_id):
     return {"item": item_id}
 
 
-def shaped(pattern, key, tier):
-    """Vanilla 3x3 crafting table recipe."""
+def result(item_id, count=1):
+    return {"count": count, "id": item_id}
+
+
+def mod_loaded(modid):
+    return {"type": "neoforge:mod_loaded", "modid": modid}
+
+
+def exists(item_id):
+    return {"type": "neoforge:item_exists", "item": item_id}
+
+
+# true when the recipe type of the Avaritia extreme crafting table is registered
+EXTREME_TABLE = {"type": f"{MODID}:recipe_serializer_exists", "serializer": "avaritia:shaped_table"}
+# follows recipes.coreRecipes in config/pi_generator-common.toml (default: always true)
+CORE_RECIPES = {"type": f"{MODID}:core_recipes"}
+
+
+def mods_of(key):
+    """Conditions for the mods the ingredients come from (minecraft and this mod need none)."""
+    mods = sorted({v.split(":")[0] for v in key.values()} - {"minecraft", MODID, "avaritia"})
+    return [mod_loaded(mod) for mod in mods]
+
+
+def write_recipe(name, recipe, conditions=()):
+    conditions = list(conditions)
+    write_json(os.path.join(RECIPES, name + ".json"),
+               {"neoforge:conditions": conditions, **recipe} if conditions else recipe)
+
+
+def shaped(pattern, key, output, count=1):
+    """Crafting table recipe."""
+    used = set("".join(pattern)) - {" "}
+    assert used == set(key), (used, set(key))
     return {
         "type": "minecraft:crafting_shaped",
         "category": "misc",
         "key": {k: item(v) for k, v in key.items()},
         "pattern": pattern,
-        "result": item(gen(tier)),
-        "show_notification": True,
+        "result": result(output, count),
     }
 
 
-def extreme(pattern, key, tier):
-    """Re-Avaritia 1.20.1 extreme crafting table recipe (9x9 grid = table tier 4)."""
+def extreme(pattern, key, output):
+    """Re-Avaritia extreme crafting table recipe (9x9 grid = table tier 4)."""
     assert len(pattern) == 9 and all(len(row) == 9 for row in pattern), pattern
     used = set("".join(pattern)) - {" "}
     assert used == set(key), (used, set(key))
     return {
         "type": "avaritia:shaped_table",
-        "category": "misc",
         "key": {k: item(v) for k, v in key.items()},
         "pattern": pattern,
-        "result": item(gen(tier)),
-        "show_notification": True,
+        "result": result(output),
         "tier": 4,
     }
 
 
-def conditional(*variants):
-    """forge:conditional - the first variant whose conditions all pass is loaded, otherwise the recipe is skipped."""
-    return {
-        "type": "forge:conditional",
-        "recipes": [{"conditions": conditions, "recipe": recipe} for conditions, recipe in variants],
-    }
-
-
-EXTREME_TABLE = {"type": f"{MODID}:recipe_serializer_exists", "serializer": "avaritia:shaped_table"}
-FALLBACK = {"type": f"{MODID}:fallback_recipes"}
-
-
-def exists(item_id):
-    return {"type": "forge:item_exists", "item": item_id}
-
-
-# Avaritia item ids. Re-Avaritia (1.20.1) uses "neutron_ingot" / "neutron" for the neutronium ingot / block,
-# other ports call them "neutronium_ingot" / "neutronium_block" - both spellings get a recipe variant.
+# Avaritia item ids. Re-Avaritia calls the neutronium ingot / block "neutron_ingot" / "neutron"; a variant
+# with "neutronium_ingot" / "neutronium_block" is written as well in case another port uses these names.
 NEUTRONIUM_NAMES = [
-    {"ingot": "avaritia:neutron_ingot", "block": "avaritia:neutron"},
-    {"ingot": "avaritia:neutronium_ingot", "block": "avaritia:neutronium_block"},
+    ("", {"ingot": "avaritia:neutron_ingot", "block": "avaritia:neutron"}),
+    ("_neutronium", {"ingot": "avaritia:neutronium_ingot", "block": "avaritia:neutronium_block"}),
 ]
 
 
 def generate_filter_recipes():
-    out = os.path.join(DATA, "recipes")
     filter_id = f"{MODID}:resource_filter"
-    write_json(os.path.join(out, "resource_filter.json"), {
-        "type": "minecraft:crafting_shaped",
-        "category": "misc",
-        "key": {"I": item("minecraft:iron_ingot"), "P": item("minecraft:paper"), "H": item("minecraft:hopper")},
-        "pattern": ["IPI",
-                    "PHP",
-                    "IPI"],
-        "result": item(filter_id),
-        "show_notification": True,
-    })
-    # Crafting a filter by itself returns a blank one (the result carries no NBT).
-    write_json(os.path.join(out, "resource_filter_clear.json"), {
+    write_recipe("resource_filter", shaped(
+        ["IPI",
+         "PHP",
+         "IPI"],
+        {"I": "minecraft:iron_ingot", "P": "minecraft:paper", "H": "minecraft:hopper"}, filter_id))
+    # Crafting a filter by itself returns a blank one (the result carries no filter data).
+    write_recipe("resource_filter_clear", {
         "type": "minecraft:crafting_shapeless",
         "category": "misc",
         "ingredients": [item(filter_id)],
-        "result": item(filter_id),
+        "result": result(filter_id),
     })
 
 
@@ -722,91 +782,72 @@ UPGRADE_TIER_ITEM = {1: "minecraft:iron_ingot", 2: "mekanism:alloy_infused", 3: 
 
 
 def generate_upgrade_recipes():
-    out = os.path.join(DATA, "recipes")
     for kind, kind_item in UPGRADE_KIND_ITEM.items():
         for tier in UPGRADE_TIERS:
             name = f"{kind}_upgrade_{tier}"
             centre = "mekanism:basic_control_circuit" if tier == 1 else f"{MODID}:{kind}_upgrade_{tier - 1}"
-            write_json(os.path.join(out, name + ".json"), {
-                "type": "minecraft:crafting_shaped",
-                "category": "misc",
-                "key": {"M": item(UPGRADE_TIER_ITEM[tier]), "K": item(kind_item), "C": item(centre)},
-                "pattern": ["MKM",
-                            "KCK",
-                            "MKM"],
-                "result": item(f"{MODID}:{name}"),
-                "show_notification": True,
-            })
+            key = {"M": UPGRADE_TIER_ITEM[tier], "K": kind_item, "C": centre}
+            write_recipe(name, shaped(
+                ["MKM",
+                 "KCK",
+                 "MKM"], key, f"{MODID}:{name}"), mods_of(key))
 
 
 def generate_recipes():
-    out = os.path.join(DATA, "recipes")
-
-    # ---- tier 1-5: crafting table --------------------------------------------------------------
-    write_json(os.path.join(out, "generator_tier_1.json"), shaped(
-        ["ICI",
+    # ---- tier 1-5: crafting table, Mekanism + AE2 ----------------------------------------------
+    key = {"F": "mekanism:steel_casing", "S": "mekanism:ingot_steel", "C": "mekanism:basic_control_circuit",
+           "T": "mekanism:energy_tablet", "O": "mekanism:ingot_osmium"}
+    write_recipe("generator_tier_1", shaped(
+        ["SCS",
          "OFO",
-         "IRI"],
-        {"F": "thermal:machine_frame", "I": "thermal:invar_ingot", "C": "mekanism:basic_control_circuit",
-         "R": "thermal:rf_coil", "O": "mekanism:ingot_osmium"}, 1))
+         "STS"], key, gen(1)), mods_of(key))
 
-    write_json(os.path.join(out, "generator_tier_2.json"), shaped(
-        ["ECE",
+    key = {"G": gen(1), "R": "mekanism:ingot_refined_glowstone", "A": "mekanism:alloy_infused",
+           "C": "mekanism:advanced_control_circuit", "T": "mekanism:energy_tablet"}
+    write_recipe("generator_tier_2", shaped(
+        ["RCR",
          "AGA",
-         "ETE"],
-        {"G": gen(1), "E": "thermal:electrum_ingot", "A": "mekanism:alloy_infused",
-         "C": "mekanism:advanced_control_circuit", "T": "mekanism:energy_tablet"}, 2))
+         "RTR"], key, gen(2)), mods_of(key))
 
-    write_json(os.path.join(out, "generator_tier_3.json"), shaped(
-        ["SPS",
+    key = {"G": gen(2), "F": "ae2:fluix_block", "P": "ae2:engineering_processor",
+           "O": "mekanism:ingot_refined_obsidian", "A": "mekanism:alloy_reinforced"}
+    write_recipe("generator_tier_3", shaped(
+        ["OPO",
          "AGA",
-         "SFS"],
-        {"G": gen(2), "F": "ae2:fluix_block", "P": "ae2:engineering_processor",
-         "S": "thermal:signalum_ingot", "A": "mekanism:alloy_reinforced"}, 3))
+         "OFO"], key, gen(3)), mods_of(key))
 
-    write_json(os.path.join(out, "generator_tier_4.json"), shaped(
-        ["ECE",
+    key = {"G": gen(3), "N": "minecraft:netherite_ingot", "K": "ae2:cell_component_64k",
+           "A": "mekanism:alloy_atomic", "C": "mekanism:elite_control_circuit", "I": "ae2:interface"}
+    write_recipe("generator_tier_4", shaped(
+        ["NCN",
          "AGA",
-         "KIK"],
-        {"G": gen(3), "E": "thermal:enderium_ingot", "K": "ae2:cell_component_64k",
-         "A": "mekanism:alloy_atomic", "C": "mekanism:elite_control_circuit", "I": "ae2:interface"}, 4))
+         "KIK"], key, gen(4)), mods_of(key))
 
-    write_json(os.path.join(out, "generator_tier_5.json"), shaped(
+    key = {"G": gen(4), "C": "mekanism:ultimate_control_circuit", "P": "mekanism:pellet_polonium",
+           "S": "ae2:singularity", "Q": "ae2:quantum_ring"}
+    write_recipe("generator_tier_5", shaped(
         ["PCP",
          "QGQ",
-         "PSP"],
-        {"G": gen(4), "C": "mekanism:ultimate_control_circuit", "P": "mekanism:pellet_polonium",
-         "S": "ae2:singularity", "Q": "ae2:quantum_ring"}, 5))
+         "PSP"], key, gen(5)), mods_of(key))
 
-    # ---- tier 6-8: Avaritia extreme crafting table (9x9) ---------------------------------------
-    # plus 3x3 fallbacks that are only enabled when the 9x9 recipe type is unavailable
-    # (or when forceFallbackRecipes=true in config/pi_generator-common.toml).
+    # ---- tier 6-8 with Avaritia: extreme crafting table (9x9) ----------------------------------
+    # Only loaded when Avaritia is installed (its recipe type is registered).
+    key = {"G": gen(5), "P": "mekanism:pellet_plutonium", "C": "avaritia:crystal_matrix_ingot",
+           "K": "ae2:cell_component_256k"}
+    write_recipe("generator_tier_6", extreme(
+        ["CCCPPPCCC",
+         "CKPPCPPKC",
+         "CPCCCCCPC",
+         "PPCKPKCPP",
+         "PCCPGPCCP",
+         "PPCKPKCPP",
+         "CPCCCCCPC",
+         "CKPPCPPKC",
+         "CCCPPPCCC"], key, gen(6)), [EXTREME_TABLE] + mods_of(key))
 
-    # tier 6
-    write_json(os.path.join(out, "generator_tier_6.json"), conditional(
-        ([EXTREME_TABLE], extreme(
-            ["CCCPPPCCC",
-             "CKPPCPPKC",
-             "CPCCCCCPC",
-             "PPCKPKCPP",
-             "PCCPGPCCP",
-             "PPCKPKCPP",
-             "CPCCCCCPC",
-             "CKPPCPPKC",
-             "CCCPPPCCC"],
-            {"G": gen(5), "P": "mekanism:pellet_plutonium", "C": "avaritia:crystal_matrix_ingot",
-             "K": "ae2:cell_component_256k"}, 6))))
-    write_json(os.path.join(out, "generator_tier_6_fallback.json"), conditional(
-        ([FALLBACK, exists("avaritia:crystal_matrix_ingot")], shaped(
-            ["CPC",
-             "KGK",
-             "CPC"],
-            {"G": gen(5), "P": "mekanism:pellet_plutonium", "C": "avaritia:crystal_matrix_ingot",
-             "K": "ae2:cell_component_256k"}, 6))))
-
-    # tier 7
-    write_json(os.path.join(out, "generator_tier_7.json"), conditional(*[
-        ([EXTREME_TABLE, exists(names["ingot"])], extreme(
+    for suffix, names in NEUTRONIUM_NAMES:
+        key = {"G": gen(6), "A": "mekanism:pellet_antimatter", "N": names["ingot"], "S": "ae2:singularity"}
+        write_recipe("generator_tier_7" + suffix, extreme(
             ["NNNNANNNN",
              "NSAAAAASN",
              "NANNNNNAN",
@@ -815,20 +856,11 @@ def generate_recipes():
              "NANSASNAN",
              "NANNNNNAN",
              "NSAAAAASN",
-             "NNNNANNNN"],
-            {"G": gen(6), "A": "mekanism:pellet_antimatter", "N": names["ingot"], "S": "ae2:singularity"}, 7))
-        for names in NEUTRONIUM_NAMES]))
-    write_json(os.path.join(out, "generator_tier_7_fallback.json"), conditional(*[
-        ([FALLBACK, exists(names["ingot"])], shaped(
-            ["NAN",
-             "SGS",
-             "NAN"],
-            {"G": gen(6), "A": "mekanism:pellet_antimatter", "N": names["ingot"], "S": "ae2:singularity"}, 7))
-        for names in NEUTRONIUM_NAMES]))
+             "NNNNANNNN"], key, gen(7)), [EXTREME_TABLE, exists(names["ingot"])] + mods_of(key))
 
-    # tier 8
-    write_json(os.path.join(out, "generator_tier_8.json"), conditional(*[
-        ([EXTREME_TABLE, exists(names["block"])], extreme(
+        key = {"G": gen(7), "I": "avaritia:infinity_ingot", "C": "avaritia:infinity_catalyst",
+               "N": names["block"], "A": "mekanism:pellet_antimatter"}
+        write_recipe("generator_tier_8" + suffix, extreme(
             ["NNNIIINNN",
              "NAAICIAAN",
              "NAIIIIIAN",
@@ -837,28 +869,50 @@ def generate_recipes():
              "IIICICIII",
              "NAIIIIIAN",
              "NAAICIAAN",
-             "NNNIIINNN"],
-            {"G": gen(7), "I": "avaritia:infinity_ingot", "C": "avaritia:infinity_catalyst",
-             "N": names["block"], "A": "mekanism:pellet_antimatter"}, 8))
-        for names in NEUTRONIUM_NAMES]))
-    write_json(os.path.join(out, "generator_tier_8_fallback.json"), conditional(*[
-        ([FALLBACK, exists(names["block"])], shaped(
-            ["NCN",
-             "IGI",
-             "ACA"],
-            {"G": gen(7), "I": "avaritia:infinity_ingot", "C": "avaritia:infinity_catalyst",
-             "N": names["block"], "A": "mekanism:pellet_antimatter"}, 8))
-        for names in NEUTRONIUM_NAMES]))
+             "NNNIIINNN"], key, gen(8)), [EXTREME_TABLE, exists(names["block"])] + mods_of(key))
+
+    # ---- tier 6-8 without Avaritia: crafting table, eight cores around the generator below ------
+    # Nothing from Avaritia is needed. More expensive than the 9x9 recipes: the cores take the same
+    # amount of the shared materials (or more), netherite / Mekanism multiblock parts instead of the
+    # Avaritia materials, and every core contains the core of the tier below.
+    key = {"P": "mekanism:pellet_plutonium", "D": "minecraft:diamond_block", "N": "minecraft:netherite_block",
+           "K": "ae2:cell_component_256k", "S": "minecraft:nether_star"}
+    write_recipe("crystal_core", shaped(
+        ["PDP",
+         "NSK",
+         "PDP"], key, f"{MODID}:crystal_core"), [CORE_RECIPES] + mods_of(key))
+
+    key = {"X": f"{MODID}:crystal_core", "A": "mekanism:pellet_antimatter", "C": "mekanism:sps_casing",
+           "S": "ae2:singularity"}
+    write_recipe("neutron_core", shaped(
+        ["ACA",
+         "SXS",
+         "ACA"], key, f"{MODID}:neutron_core"), [CORE_RECIPES] + mods_of(key))
+
+    key = {"X": f"{MODID}:neutron_core", "A": "mekanism:pellet_antimatter", "C": "mekanism:supercharged_coil",
+           "Q": "ae2:quantum_link"}
+    write_recipe("infinity_core", shaped(
+        ["ACA",
+         "QXQ",
+         "ACA"], key, f"{MODID}:infinity_core"), [CORE_RECIPES] + mods_of(key))
+
+    for tier, core in ((6, "crystal_core"), (7, "neutron_core"), (8, "infinity_core")):
+        write_recipe(f"generator_tier_{tier}_cores", shaped(
+            ["KKK",
+             "KGK",
+             "KKK"], {"G": gen(tier - 1), "K": f"{MODID}:{core}"}, gen(tier)), [CORE_RECIPES])
 
 
 if __name__ == "__main__":
     generate_textures()
     generate_filter_item()
     generate_upgrade_items()
+    generate_core_items()
     generate_gui()
     generate_logo()
     generate_models()
     generate_loot_and_tags()
+    shutil.rmtree(RECIPES, ignore_errors=True)   # recipes that are no longer generated must not stay behind
     generate_recipes()
     generate_filter_recipes()
     generate_upgrade_recipes()

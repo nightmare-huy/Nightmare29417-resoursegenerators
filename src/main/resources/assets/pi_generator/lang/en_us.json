@@ -74,5 +74,11 @@
   "gui.pi_generator.filter.except_hint": "The generator makes everything except the listed resources. Click to switch the mode",
   "gui.pi_generator.filter.slot_add": "Click with an item to add it to the list",
   "gui.pi_generator.filter.slot_shift": "Shift-clicking an item in the inventory adds it too",
-  "gui.pi_generator.filter.slot_remove": "Click with an empty cursor to remove (items are not used up)"
+  "gui.pi_generator.filter.slot_remove": "Click with an empty cursor to remove (items are not used up)",
+
+  "item.pi_generator.crystal_core": "Crystal Core",
+  "item.pi_generator.neutron_core": "Neutron Core",
+  "item.pi_generator.infinity_core": "Infinity Core",
+  "tooltip.pi_generator.core": "Tier %s generator: 8 cores around a tier %s generator",
+  "tooltip.pi_generator.core.no_avaritia": "The way to craft it without Avaritia"
 }

@@ -1,97 +1,93 @@
+// Build file for NeoForge 1.21.1, based on the official NeoForge MDK (ModDevGradle):
+// https://github.com/NeoForgeMDKs/MDK-1.21.1-ModDevGradle
 plugins {
-    id 'eclipse'
+    id 'java-library'
+    id 'net.neoforged.moddev' version '2.0.148'
     id 'idea'
-    id 'net.minecraftforge.gradle' version '[6.0,6.2)'
+}
+
+tasks.named('wrapper', Wrapper).configure {
+    distributionType = Wrapper.DistributionType.BIN
 }
 
 version = mod_version
 group = mod_group_id
 
 base {
+    // build/libs/pi_generator-<mod_version>.jar
     archivesName = mod_id
 }
 
-// Mojang ships Java 17 to end users in 1.18+, so the mod targets Java 17.
-java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+// Mojang ships Java 21 to end users in 1.21.1, so mods should target Java 21.
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
-println "Java: ${System.getProperty 'java.version'}, JVM: ${System.getProperty 'java.vm.version'} (${System.getProperty 'java.vendor'}), Arch: ${System.getProperty 'os.arch'}"
-minecraft {
-    // Official Mojang mappings (see gradle.properties).
-    mappings channel: mapping_channel, version: mapping_version
+neoForge {
+    // The version of NeoForge to compile against.
+    version = project.neo_version
 
-    // Required so that IDE runs pick up the processed resources (mods.toml expansion).
-    copyIdeResources = true
-
+    // Run configurations: ./gradlew runClient / runServer
     runs {
-        configureEach {
-            workingDirectory project.file('run')
-
-            property 'forge.logging.markers', 'REGISTRIES'
-            property 'forge.logging.console.level', 'debug'
-
-            mods {
-                "${mod_id}" {
-                    source sourceSets.main
-                }
-            }
-        }
-
         client {
-            property 'forge.enabledGameTestNamespaces', mod_id
+            client()
         }
 
         server {
-            property 'forge.enabledGameTestNamespaces', mod_id
-            args '--nogui'
+            server()
+            programArgument '--nogui'
+        }
+
+        configureEach {
+            logLevel = org.slf4j.event.Level.INFO
+        }
+    }
+
+    mods {
+        // tells the game which sources belong to the mod
+        "${mod_id}" {
+            sourceSet(sourceSets.main)
         }
     }
 }
 
-repositories {
-    // ForgeGradle automatically adds the Forge maven and Maven Central.
-    //
-    // NOTE: Mekanism / AE2 / Thermal / Avaritia are intentionally NOT declared here.
-    // Their items are looked up at runtime through ForgeRegistries by string id and are
-    // referenced by id in the JSON recipes, so the mod compiles against Forge alone.
-}
-
 dependencies {
-    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    // No dependencies besides NeoForge: Mekanism, AE2, Avaritia and the ore mods are optional at runtime
+    // and are only referred to by item id.
 }
 
-// Expands the ${...} placeholders in mods.toml / pack.mcmeta from gradle.properties.
-tasks.named('processResources', ProcessResources).configure {
+// Expands the ${...} properties in src/main/templates (META-INF/neoforge.mods.toml).
+// A missing property results in an error.
+var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
     var replaceProperties = [
-            minecraft_version: minecraft_version, minecraft_version_range: minecraft_version_range,
-            forge_version: forge_version, forge_version_range: forge_version_range,
-            loader_version_range: loader_version_range,
-            mod_id: mod_id, mod_name: mod_name, mod_license: mod_license, mod_version: mod_version,
-            mod_authors: mod_authors, mod_description: mod_description,
+            minecraft_version      : minecraft_version,
+            minecraft_version_range: minecraft_version_range,
+            neo_version            : neo_version,
+            neo_version_range      : neo_version_range,
+            loader_version_range   : loader_version_range,
+            mod_id                 : mod_id,
+            mod_name               : mod_name,
+            mod_license            : mod_license,
+            mod_version            : mod_version,
+            mod_authors            : mod_authors,
+            mod_description        : mod_description,
     ]
     inputs.properties replaceProperties
-
-    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
-        expand replaceProperties + [project: project]
-    }
+    expand replaceProperties
+    from "src/main/templates"
+    into "build/generated/sources/modMetadata"
 }
-
-tasks.named('jar', Jar).configure {
-    manifest {
-        attributes([
-                'Specification-Title'     : mod_id,
-                'Specification-Vendor'    : mod_authors,
-                'Specification-Version'   : '1',
-                'Implementation-Title'    : project.name,
-                'Implementation-Version'  : project.jar.archiveVersion,
-                'Implementation-Vendor'   : mod_authors,
-                'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
-        ])
-    }
-
-    // Reobfuscate (official -> SRG) so the jar runs in a production Forge 1.20.1 instance.
-    finalizedBy 'reobfJar'
-}
+// Include the output of "generateModMetadata" as an input directory for the build,
+// this works with both building through Gradle and the IDE.
+sourceSets.main.resources.srcDir generateModMetadata
+// To avoid having to run "generateModMetadata" manually, make it run on every project reload
+neoForge.ideSyncTask generateModMetadata
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
+}
+
+idea {
+    module {
+        downloadSources = true
+        downloadJavadoc = true
+    }
 }

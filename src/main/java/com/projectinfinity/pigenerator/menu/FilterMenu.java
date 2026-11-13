@@ -12,7 +12,7 @@ import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.core.registries.BuiltInRegistries;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -49,8 +49,8 @@ public class FilterMenu extends AbstractContainerMenu {
 
         int index = 0;
         for (ResourceLocation id : ResourceFilterItem.getEntries(getFilter())) {
-            if (index < GHOST_SLOTS && ForgeRegistries.ITEMS.containsKey(id)) {
-                ghosts.setItem(index++, new ItemStack(ForgeRegistries.ITEMS.getValue(id)));
+            if (index < GHOST_SLOTS && BuiltInRegistries.ITEM.containsKey(id)) {
+                ghosts.setItem(index++, new ItemStack(BuiltInRegistries.ITEM.get(id)));
             }
         }
 
@@ -155,7 +155,7 @@ public class FilterMenu extends AbstractContainerMenu {
         for (int slot = 0; slot < GHOST_SLOTS; slot++) {
             ItemStack ghost = ghosts.getItem(slot);
             if (!ghost.isEmpty()) {
-                entries.add(ForgeRegistries.ITEMS.getKey(ghost.getItem()));
+                entries.add(BuiltInRegistries.ITEM.getKey(ghost.getItem()));
             }
         }
         ResourceFilterItem.setEntries(filter, entries);

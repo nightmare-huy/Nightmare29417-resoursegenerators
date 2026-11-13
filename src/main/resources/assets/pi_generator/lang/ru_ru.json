@@ -74,5 +74,11 @@
   "gui.pi_generator.filter.except_hint": "Генератор производит всё, кроме ресурсов из списка. Нажмите, чтобы сменить режим",
   "gui.pi_generator.filter.slot_add": "Нажмите предметом, чтобы добавить его в список",
   "gui.pi_generator.filter.slot_shift": "Shift + клик по предмету в инвентаре тоже добавляет",
-  "gui.pi_generator.filter.slot_remove": "Клик пустым курсором убирает (предметы не тратятся)"
+  "gui.pi_generator.filter.slot_remove": "Клик пустым курсором убирает (предметы не тратятся)",
+
+  "item.pi_generator.crystal_core": "Кристаллическое ядро",
+  "item.pi_generator.neutron_core": "Нейтронное ядро",
+  "item.pi_generator.infinity_core": "Ядро Бесконечности",
+  "tooltip.pi_generator.core": "Генератор %s уровня: 8 ядер вокруг генератора %s уровня",
+  "tooltip.pi_generator.core.no_avaritia": "Способ крафта без Avaritia"
 }
